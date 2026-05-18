@@ -1,0 +1,298 @@
+Plot Report
+-----------
+
+Report Written:     15:25 Wednesday, April 29, 2026
+Project Path:       N:\TrakTrikeElectronics4\electronics\TrakTrike4.prj
+Design Path:        N:\TrakTrikeElectronics4\electronics\TrakTrike4.pcb
+Design Title:       
+Created:            19/04/2026 11:54:32
+Last Saved:         29/04/2026 15:24:48
+Editing Time:       520 min
+Units:              mm (precision 1)
+
+
+Device Settings
+===============
+
+
+Gerber Settings
+===============
+
+    Leading zero suppression.
+    G01 assumed throughout.
+    Line termination <*> <CR> <LF>.
+    3.5 format absolute inches.
+    Format commands defined in Gerber file.
+    Aperture table defined in Gerber file.
+    Hardware arcs allowed.
+
+
+Drill Settings
+==============
+
+    Excellon Format 2
+    Format 3.5 absolute in mm.
+    Zero suppression Leading
+
+
+
+Plots Output
+============
+
+    Plot Job: "N:\TrakTrikeElectronics4\electronics\TrakTrike4.mop"
+
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Top Silkscreen.gbr
+
+    Layers:
+    ------------------
+    Top Silkscreen
+
+    D-Code Shape  (thou)
+    -----------------------
+    D10    Round 7.87
+    D11    Round 11.81
+    D12    Round 5.00
+    D13    Round 1.00
+    D14    Round 10.00
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Top Copper.gbr
+
+    Layers:
+    ------------------
+    Top Copper
+    Board Outlines
+
+    D-Code Shape  (thou)
+    --------------------------------------------------
+    D12    Round 5.00
+    D15    Round 50.00
+    D16    Round 31.50
+    D17    Round 56.00
+    D18    Round 48.00
+    D19    Round 137.80
+    D70    Rectangle 59.06 X 98.43  Rotation 90
+    D71    Oval 59.06 X 98.43  Rotation 90
+    D20    Rounded Rectangle 66.93 X 118.11 X 23.62
+    D21    Rectangle 66.93 X 118.11
+    D22    Oval 60.00 X 110.00  Rotation 90
+    D23    Rectangle 70.87 X 118.11
+    D24    Oval 70.87 X 118.11
+    D25    Bullet 78.74 X 39.37  Rotation 270
+    D26    Round 78.74
+    D27    Bullet 78.74 X 39.37  Rotation 90
+    D28    Rectangle 55.00 X 60.00
+    D29    Rectangle 55.00 X 60.00  Rotation 90
+    D72    Rectangle 62.99 X 137.80  Rotation 90
+    D73    Oval 62.99 X 137.80  Rotation 90
+    D74    Rectangle 62.99 X 137.80
+    D75    Oval 62.99 X 137.80
+    D76    Rectangle 78.74 X 118.11  Rotation 90
+    D77    Oval 78.74 X 118.11  Rotation 90
+    D78    Square 78.74
+    D79    Octagon 78.74
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Top Copper (Resist).gbr
+
+    Layers:
+    --------------
+    Top Copper
+
+    D-Code Shape  (thou)
+    --------------------------------------------------
+    D80    Round 147.80
+    D81    Rectangle 69.06 X 108.43  Rotation 90
+    D82    Oval 69.06 X 108.43  Rotation 90
+    D83    Rounded Rectangle 66.93 X 118.11 X 23.62
+    D84    Rectangle 76.93 X 128.11
+    D85    Oval 70.00 X 120.00  Rotation 90
+    D86    Rectangle 80.87 X 128.11
+    D87    Oval 80.87 X 128.11
+    D88    Bullet 88.74 X 49.37  Rotation 270
+    D89    Round 88.74
+    D90    Bullet 88.74 X 49.37  Rotation 90
+    D91    Rectangle 65.00 X 70.00
+    D92    Rectangle 65.00 X 70.00  Rotation 90
+    D93    Rectangle 72.99 X 147.80  Rotation 90
+    D94    Oval 72.99 X 147.80  Rotation 90
+    D95    Rectangle 72.99 X 147.80
+    D96    Oval 72.99 X 147.80
+    D97    Rectangle 88.74 X 128.11  Rotation 90
+    D98    Oval 88.74 X 128.11  Rotation 90
+    D99    Square 88.74
+    D100   Octagon 78.74
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Top Paste Mask.gbr
+
+    Layers:
+    ------------------
+    Top Paste Mask
+
+    D-Code Shape  (thou)
+    ----------------------------------------------
+    D101   Bullet 72.74 X 33.37  Rotation 270
+    D102   Round 72.74
+    D103   Bullet 72.74 X 33.37  Rotation 90
+    D104   Rectangle 49.00 X 54.00
+    D105   Rectangle 49.00 X 54.00  Rotation 90
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Bottom Copper.gbr
+
+    Layers:
+    -----------------
+    Bottom Copper
+
+    D-Code Shape  (thou)
+    --------------------------------------------------
+    D15    Round 50.00
+    D16    Round 31.50
+    D17    Round 56.00
+    D18    Round 48.00
+    D19    Round 137.80
+    D70    Rectangle 59.06 X 98.43  Rotation 90
+    D71    Oval 59.06 X 98.43  Rotation 90
+    D20    Rounded Rectangle 66.93 X 118.11 X 23.62
+    D21    Rectangle 66.93 X 118.11
+    D22    Oval 60.00 X 110.00  Rotation 90
+    D23    Rectangle 70.87 X 118.11
+    D24    Oval 70.87 X 118.11
+    D28    Rectangle 55.00 X 60.00
+    D29    Rectangle 55.00 X 60.00  Rotation 90
+    D72    Rectangle 62.99 X 137.80  Rotation 90
+    D73    Oval 62.99 X 137.80  Rotation 90
+    D74    Rectangle 62.99 X 137.80
+    D75    Oval 62.99 X 137.80
+    D76    Rectangle 78.74 X 118.11  Rotation 90
+    D77    Oval 78.74 X 118.11  Rotation 90
+    D78    Square 78.74
+    D79    Octagon 78.74
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Bottom Silkscreen.gbr
+
+    Layers:
+    ---------------------
+    Bottom Silkscreen
+
+    D-Code Shape  (thou)
+    -----------------------
+    D12    Round 5.00
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Bottom Solder Mask.gbr
+
+    Layers:
+    ----------------------
+    Bottom Solder Mask
+
+    D-Code Shape  (thou)
+    --------------------------------------------------
+    D106   Round 62.00
+    D107   Round 54.00
+    D108   Round 143.80
+    D109   Rectangle 65.06 X 104.43  Rotation 90
+    D110   Oval 65.06 X 104.43  Rotation 90
+    D111   Rounded Rectangle 66.93 X 118.11 X 23.62
+    D112   Rectangle 72.93 X 124.11
+    D113   Oval 66.00 X 116.00  Rotation 90
+    D114   Rectangle 76.87 X 124.11
+    D115   Oval 76.87 X 124.11
+    D116   Rectangle 61.00 X 66.00  Rotation 90
+    D117   Rectangle 61.00 X 66.00
+    D118   Rectangle 68.99 X 143.80  Rotation 90
+    D119   Oval 68.99 X 143.80  Rotation 90
+    D120   Rectangle 68.99 X 143.80
+    D121   Oval 68.99 X 143.80
+    D122   Rectangle 84.74 X 124.11  Rotation 90
+    D123   Oval 84.74 X 124.11  Rotation 90
+    D124   Square 84.74
+    D125   Octagon 78.74
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Bottom Paste Mask.gbr
+
+    Layers:
+    ---------------------
+    Bottom Paste Mask
+
+    D-Code Shape  (thou)
+    ----------------------------------------------
+    D104   Rectangle 49.00 X 54.00
+    D105   Rectangle 49.00 X 54.00  Rotation 90
+
+Gerber Output
+=============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - Gerber Drill Data - [Through Hole].gbr
+
+    Layers:
+    ------------------
+    [Through Hole]
+
+    D-Code Shape  (thou)
+    -----------------------
+    D126   Round 32.00
+    D127   Round 24.00
+    D128   Round 125.98
+    D129   Round 39.37
+    D130   Round 43.31
+    D131   Round 35.00
+
+NC Drill Output
+===============
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - NC Drill Data - [Through Hole].drl
+
+    Output:
+    ---------------------------
+    Plated Round Drill Holes
+    Plated Slots
+
+    Tool  Size           Count   ID
+    --------------------------------------
+    T001  0.02400 inches 1     A
+    T002  0.03200 inches 17    F
+    T003  0.03500 inches 5     D
+    T004  0.03937 inches 56    H
+    T005  0.04331 inches 11    P
+    T006  0.12598 inches 4     C
+    --------------------------------------
+    Total                94
+    --------------------------------------
+
+N:\TrakTrikeElectronics4\electronics\Plots\TrakTrike4 - NC Drill Data - [Through Hole] (Unplated).drl
+
+    Output:
+    -----------------------------
+    Unplated Round Drill Holes
+    Unplated Slots
+
+    Tool  Size Count   ID
+    ----------------------------
+    ----------------------------
+    Total      0
+    ----------------------------
+
+
+End Of Report.

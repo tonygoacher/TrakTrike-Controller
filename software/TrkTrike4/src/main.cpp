@@ -75,7 +75,6 @@ public:
 
     void begin(const Config& cfg) {
         config = cfg;
-        pinMode(THROTTLE, INPUT);
         filtered = config.minADC;
         lastOutput = 0.0f;
         lastTime = millis();
@@ -84,9 +83,7 @@ public:
     float GetThrottle() {
 
         int raw = analogRead(THROTTLE);
-
-        Serial.print("RAW: ");
-        Serial.print(raw);
+        //Serial.println(raw);
 
         int validMin = config.minADC - 20;
         int validMax = config.maxADC + 20;
@@ -156,7 +153,6 @@ TwistThrottle throttle;
 // CALIBRATION STATE
 // =====================
 struct ThrottleCal {
-    bool active = false;
     int minADC = 1023;
     int maxADC = 0;
 };
@@ -177,6 +173,59 @@ void updateDACDefaults();
 void applyCalibration();
 void configureThrottle();
 void printParams();
+
+void printConfig(const Config& cfg)
+{
+    Serial.println("===== CONFIG =====");
+
+    Serial.print("Version: ");
+    Serial.println(cfg.header.version);
+
+    Serial.print("CRC: ");
+    Serial.println(cfg.header.crc);
+
+    Serial.println();
+
+    Serial.print("DAC_MIN: ");
+    Serial.println(cfg.DAC_MIN);
+
+    Serial.print("DAC_START: ");
+    Serial.println(cfg.DAC_START);
+
+    Serial.print("DAC_MAX: ");
+    Serial.println(cfg.DAC_MAX);
+
+    Serial.println();
+
+    Serial.print("THROTTLE_DEADBAND: ");
+    Serial.println(cfg.THROTTLE_DEADBAND, 4);
+
+    Serial.print("TAKEUP_END: ");
+    Serial.println(cfg.TAKEUP_END, 4);
+
+    Serial.println();
+
+    Serial.print("RAMP_UP_RATE: ");
+    Serial.println(cfg.RAMP_UP_RATE, 4);
+
+    Serial.print("RAMP_DOWN_RATE: ");
+    Serial.println(cfg.RAMP_DOWN_RATE, 4);
+
+    Serial.println();
+
+    Serial.print("trim: ");
+    Serial.println(cfg.trim, 4);
+
+    Serial.println();
+
+    Serial.print("THROTTLE_MIN_ADC: ");
+    Serial.println(cfg.THROTTLE_MIN_ADC);
+
+    Serial.print("THROTTLE_MAX_ADC: ");
+    Serial.println(cfg.THROTTLE_MAX_ADC);
+
+    Serial.println("==================");
+}
 
 // =====================
 // CRC
@@ -215,6 +264,8 @@ void applyConfig(const Config &cfg) {
 
     THROTTLE_MIN_ADC = cfg.THROTTLE_MIN_ADC;
     THROTTLE_MAX_ADC = cfg.THROTTLE_MAX_ADC;
+
+    printConfig(cfg);
 }
 
 // =====================
@@ -272,7 +323,7 @@ bool loadConfig() {
 void loadDefaults() {
 
     DAC_MIN = 800;
-    DAC_START = 1100;
+    DAC_START = 800;
     DAC_MAX = 3500;
 
     THROTTLE_DEADBAND = 0.05f;
@@ -283,8 +334,8 @@ void loadDefaults() {
 
     trim = 0.0f;
 
-    THROTTLE_MIN_ADC = 200;
-    THROTTLE_MAX_ADC = 820;
+    THROTTLE_MIN_ADC = 0;
+    THROTTLE_MAX_ADC = 1023;
 
     Serial.println("Loaded defaults");
     printParams();
@@ -312,10 +363,7 @@ void configureThrottle() {
 // =====================
 // CALIBRATION
 // =====================
-void startCalibration() {
-    throttleCal.active = true;
-    Serial.println("Calibration start");
-}
+
 
 void captureMin() {
     throttleCal.minADC = analogRead(THROTTLE);
@@ -340,7 +388,6 @@ void applyCalibration() {
     configureThrottle();
 
     Serial.println("Calibration applied");
-    throttleCal.active = false;
 }
 
 // =====================
@@ -377,11 +424,11 @@ void setTrackSpeed(int trackID, float speed) {
     speed = constrain(speed, 0.0f, 1.0f);
 
     int dac = DAC_START + speed * (DAC_MAX - DAC_START);
-    dac = constrain(dac, DAC_MIN, DAC_MAX);
+    dac = constrain(dac, 0, DAC_MAX);
 
     static int lastDAC[2] = {-1, -1};
 
-    if (dac != lastDAC[trackID]) {
+   // if (dac != lastDAC[trackID]) {
 
         if (trackID == 0)
             mcp.setChannelValue(MCP4728_CHANNEL_A, dac);
@@ -389,7 +436,9 @@ void setTrackSpeed(int trackID, float speed) {
             mcp.setChannelValue(MCP4728_CHANNEL_B, dac);
 
         lastDAC[trackID] = dac;
-    }
+        Serial.print("dac output:");
+        Serial.println(dac);
+   // }
 }
 
 // =====================
@@ -443,19 +492,38 @@ void printParams() {
 
 void processCommand(String cmd)
  {
-    Serial.println(cmd.c_str());
+  
     cmd.trim();
+    Serial.println(cmd.c_str());
 
     if (cmd == "save") { saveConfig(); updateDACDefaults(); return; }
     if (cmd == "load") { if (!loadConfig()) loadDefaults(); configureThrottle(); return; }
     if (cmd == "defaults") { loadDefaults(); configureThrottle(); return; }
 
-    if (cmd == "cal start") { startCalibration(); return; }
     if (cmd == "cal min") { captureMin(); return; }
     if (cmd == "cal max") { captureMax(); return; }
     if (cmd == "cal apply") { applyCalibration(); saveConfig(); return; }
 
     if (cmd == "show") { printParams(); return; }
+
+    if (cmd.startsWith("start ")) 
+    {
+
+        DAC_START = cmd.substring(6).toInt();
+
+
+
+        float volts = 4.7f * DAC_START / 4095.0f;
+
+        Serial.print("DAC_START: ");
+        Serial.print(DAC_START);
+
+        Serial.print("  Voltage: ");
+        Serial.print(volts, 2);
+        Serial.println("V");
+
+        return;
+    }
 }
 
 // =====================
@@ -464,14 +532,15 @@ void processCommand(String cmd)
 void setup() {
 
     Serial.begin(115200);
-    Wire.begin();
+    //Wire.begin();
     delay(3000);
     Serial.println("Running");
    
- /*   if (!mcp.begin()) {
+    if (!mcp.begin()) {
         Serial.println("MCP4728 not found!");
         while (1);
-    }*/
+
+    }
 
     if (!loadConfig()) loadDefaults();
     Serial.println("Config loaded");
@@ -487,7 +556,7 @@ void setup() {
 // =====================
 // LOOP
 // =====================
-
+int slowdown = 500;
 void loop() {
 
     handleSerial();
@@ -502,12 +571,20 @@ void loop() {
     float leftSpeed  = currentOutput * (1.0f + trim);
     float rightSpeed = currentOutput * (1.0f - trim);
 
- //   setTrackSpeed(0, leftSpeed);
-    // setTrackSpeed(1, rightSpeed);
-   Serial.print("Track L: ");
-    Serial.print(leftSpeed);
-    Serial.print(" Track R: ");
-    Serial.println(rightSpeed);
+    setTrackSpeed(0, leftSpeed);
+    setTrackSpeed(1, rightSpeed);
+    if(slowdown)
+    {
+        slowdown--;
+        if(slowdown == 0)
+        {
+            Serial.print("Track L: ");
+            Serial.print(leftSpeed);
+            Serial.print(" Track R: ");
+            Serial.println(rightSpeed); 
+            slowdown = 500;
+        }
+    }
 
 }
 

@@ -3,5 +3,5 @@
 
 
 
-#define THROTTLE    A2
+#define THROTTLE    A0
 #endif // __PORTS_H__
