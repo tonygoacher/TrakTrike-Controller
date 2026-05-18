@@ -18,6 +18,32 @@ Adafruit_MCP4728 mcp;
 #define EEPROM_ADDR 0
 #define PARAM_VERSION 1
 
+struct DriveProfile
+{
+    float maxOutput;
+    float curveExponent;
+    float rampUp;
+    float rampDown;
+};
+
+
+DriveProfile normalProfile =
+{
+    1.0f,   // maxOutput
+    1.3f,   // curve
+    0.05f,  // ramp up
+    0.8f    // ramp down
+};
+
+DriveProfile slowProfile =
+{
+    0.35f,  // maxOutput
+    1.5f,   // softer curve
+    0.03f,  // gentler ramp
+    0.8f    // HArd decel
+};
+
+
 typedef struct {
     uint8_t  version;
     uint16_t crc;
@@ -444,7 +470,8 @@ void setTrackSpeed(int trackID, float speed) {
 // =====================
 // THROTTLE MAP
 // =====================
-float mapThrottle(float t) {
+float mapThrottle(float t, const DriveProfile& profile)
+{
 
     if (t < THROTTLE_DEADBAND)
         return 0.0f;
@@ -456,10 +483,14 @@ float mapThrottle(float t) {
     }
 
     float x = (t - TAKEUP_END) / (1.0f - TAKEUP_END);
-    x = pow(x, 1.3);
 
-    float out = 0.1f + x * 0.9f;
-    if (t > 0.95f) out = 1.0f;
+    x = pow(x, profile.curveExponent);
+
+    float out = 0.1f + x * (profile.maxOutput - 0.1f);
+
+    if (t > 0.95f)
+        return profile.maxOutput;
+
     return out;
 
 }
@@ -553,6 +584,11 @@ void setup() {
     printParams();
 }
 
+bool IsSlowProfile()
+{
+    return true;
+}
+
 // =====================
 // LOOP
 // =====================
@@ -563,9 +599,19 @@ void loop() {
 
     float throttleVal = throttle.GetThrottle();
 
-    float target = mapThrottle(throttleVal);
+    DriveProfile* profile;
 
-    float rampRate = (target > currentOutput) ? RAMP_UP_RATE : RAMP_DOWN_RATE;
+    if (IsSlowProfile())
+        profile = &slowProfile;
+    else
+        profile = &normalProfile;
+
+    float target = mapThrottle(throttleVal, *profile);
+
+    float rampRate = (target > currentOutput) ?
+                 profile->rampUp :
+                 profile->rampDown;
+
     currentOutput += (target - currentOutput) * rampRate;
 
     float leftSpeed  = currentOutput * (1.0f + trim);
@@ -585,6 +631,8 @@ void loop() {
             slowdown = 500;
         }
     }
+
+
 
 }
 
