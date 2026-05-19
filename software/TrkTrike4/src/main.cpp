@@ -109,7 +109,7 @@ public:
     float GetThrottle() {
 
         int raw = analogRead(THROTTLE);
-        //Serial.println(raw);
+
 
         int validMin = config.minADC - 20;
         int validMax = config.maxADC + 20;
@@ -131,10 +131,6 @@ public:
                        (float)(config.maxADC - (config.minADC + config.deadband));
 
         output = constrain(output, 0.0f, 1.0f);
-
-
-    //    Serial.print("  OUT: ");
-      //  Serial.println(output, 4);
 
         return applyRateLimit(output);
     }
@@ -349,7 +345,7 @@ bool loadConfig() {
 void loadDefaults() {
 
     DAC_MIN = 800;
-    DAC_START = 800;
+    DAC_START = 1060;
     DAC_MAX = 3500;
 
     THROTTLE_DEADBAND = 0.05f;
@@ -360,8 +356,8 @@ void loadDefaults() {
 
     trim = 0.0f;
 
-    THROTTLE_MIN_ADC = 0;
-    THROTTLE_MAX_ADC = 1023;
+    THROTTLE_MIN_ADC = 177;
+    THROTTLE_MAX_ADC = 808;
 
     Serial.println("Loaded defaults");
     printParams();
@@ -462,8 +458,6 @@ void setTrackSpeed(int trackID, float speed) {
             mcp.setChannelValue(MCP4728_CHANNEL_B, dac);
 
         lastDAC[trackID] = dac;
-        Serial.print("dac output:");
-        Serial.println(dac);
    // }
 }
 
@@ -564,7 +558,7 @@ void setup() {
 
     Serial.begin(115200);
     //Wire.begin();
-    delay(3000);
+    delay(100);
     Serial.println("Running");
    
     if (!mcp.begin()) {
@@ -586,7 +580,7 @@ void setup() {
 
 bool IsSlowProfile()
 {
-    return true;
+    return false;
 }
 
 // =====================
