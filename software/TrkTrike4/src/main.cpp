@@ -18,6 +18,32 @@ Adafruit_MCP4728 mcp;
 #define EEPROM_ADDR 0
 #define PARAM_VERSION 1
 
+struct DriveProfile
+{
+    float maxOutput;
+    float curveExponent;
+    float rampUp;
+    float rampDown;
+};
+
+
+DriveProfile normalProfile =
+{
+    1.0f,   // maxOutput
+    1.3f,   // curve
+    0.05f,  // ramp up
+    0.8f    // ramp down
+};
+
+DriveProfile slowProfile =
+{
+    0.35f,  // maxOutput
+    1.5f,   // softer curve
+    0.03f,  // gentler ramp
+    0.8f    // HArd decel
+};
+
+
 typedef struct {
     uint8_t  version;
     uint16_t crc;
@@ -83,7 +109,7 @@ public:
     float GetThrottle() {
 
         int raw = analogRead(THROTTLE);
-        //Serial.println(raw);
+
 
         int validMin = config.minADC - 20;
         int validMax = config.maxADC + 20;
@@ -105,10 +131,6 @@ public:
                        (float)(config.maxADC - (config.minADC + config.deadband));
 
         output = constrain(output, 0.0f, 1.0f);
-
-
-    //    Serial.print("  OUT: ");
-      //  Serial.println(output, 4);
 
         return applyRateLimit(output);
     }
@@ -323,7 +345,7 @@ bool loadConfig() {
 void loadDefaults() {
 
     DAC_MIN = 800;
-    DAC_START = 800;
+    DAC_START = 1060;
     DAC_MAX = 3500;
 
     THROTTLE_DEADBAND = 0.05f;
@@ -334,8 +356,8 @@ void loadDefaults() {
 
     trim = 0.0f;
 
-    THROTTLE_MIN_ADC = 0;
-    THROTTLE_MAX_ADC = 1023;
+    THROTTLE_MIN_ADC = 177;
+    THROTTLE_MAX_ADC = 808;
 
     Serial.println("Loaded defaults");
     printParams();
@@ -436,15 +458,14 @@ void setTrackSpeed(int trackID, float speed) {
             mcp.setChannelValue(MCP4728_CHANNEL_B, dac);
 
         lastDAC[trackID] = dac;
-        Serial.print("dac output:");
-        Serial.println(dac);
    // }
 }
 
 // =====================
 // THROTTLE MAP
 // =====================
-float mapThrottle(float t) {
+float mapThrottle(float t, const DriveProfile& profile)
+{
 
     if (t < THROTTLE_DEADBAND)
         return 0.0f;
@@ -456,10 +477,14 @@ float mapThrottle(float t) {
     }
 
     float x = (t - TAKEUP_END) / (1.0f - TAKEUP_END);
-    x = pow(x, 1.3);
 
-    float out = 0.1f + x * 0.9f;
-    if (t > 0.95f) out = 1.0f;
+    x = pow(x, profile.curveExponent);
+
+    float out = 0.1f + x * (profile.maxOutput - 0.1f);
+
+    if (t > 0.95f)
+        return profile.maxOutput;
+
     return out;
 
 }
@@ -533,7 +558,7 @@ void setup() {
 
     Serial.begin(115200);
     //Wire.begin();
-    delay(3000);
+    delay(100);
     Serial.println("Running");
    
     if (!mcp.begin()) {
@@ -553,6 +578,11 @@ void setup() {
     printParams();
 }
 
+bool IsSlowProfile()
+{
+    return false;
+}
+
 // =====================
 // LOOP
 // =====================
@@ -563,9 +593,19 @@ void loop() {
 
     float throttleVal = throttle.GetThrottle();
 
-    float target = mapThrottle(throttleVal);
+    DriveProfile* profile;
 
-    float rampRate = (target > currentOutput) ? RAMP_UP_RATE : RAMP_DOWN_RATE;
+    if (IsSlowProfile())
+        profile = &slowProfile;
+    else
+        profile = &normalProfile;
+
+    float target = mapThrottle(throttleVal, *profile);
+
+    float rampRate = (target > currentOutput) ?
+                 profile->rampUp :
+                 profile->rampDown;
+
     currentOutput += (target - currentOutput) * rampRate;
 
     float leftSpeed  = currentOutput * (1.0f + trim);
@@ -585,6 +625,8 @@ void loop() {
             slowdown = 500;
         }
     }
+
+
 
 }
 
