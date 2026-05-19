@@ -16,7 +16,7 @@ Adafruit_MCP4728 mcp;
 // CONFIG
 // =====================
 #define EEPROM_ADDR 0
-#define PARAM_VERSION 1
+#define PARAM_VERSION 2
 
 struct DriveProfile
 {
@@ -62,7 +62,8 @@ struct Config {
     float RAMP_UP_RATE;
     float RAMP_DOWN_RATE;
 
-    float trim;
+    float LeftTrim;
+    float RightTrim;
 
     int THROTTLE_MIN_ADC;
     int THROTTLE_MAX_ADC;
@@ -81,10 +82,14 @@ float TAKEUP_END;
 float RAMP_UP_RATE;
 float RAMP_DOWN_RATE;
 
-float trim;
+float LEFT_TRIM;
+float RIGHT_TRIM;
 
 int THROTTLE_MIN_ADC;
 int THROTTLE_MAX_ADC;
+
+// Declare forward refs
+void  loadDefaults();
 
 // =====================
 // THROTTLE CLASS
@@ -235,8 +240,11 @@ void printConfig(const Config& cfg)
 
     Serial.println();
 
-    Serial.print("trim: ");
-    Serial.println(cfg.trim, 4);
+    Serial.print("Left trim: ");
+    Serial.println(cfg.LeftTrim, 4);
+
+    Serial.print("Right trim: ");
+    Serial.println(cfg.RightTrim, 4);
 
     Serial.println();
 
@@ -282,7 +290,8 @@ void applyConfig(const Config &cfg) {
     RAMP_UP_RATE = cfg.RAMP_UP_RATE;
     RAMP_DOWN_RATE = cfg.RAMP_DOWN_RATE;
 
-    trim = cfg.trim;
+    LEFT_TRIM = cfg.LeftTrim;
+    RIGHT_TRIM = cfg.RightTrim;
 
     THROTTLE_MIN_ADC = cfg.THROTTLE_MIN_ADC;
     THROTTLE_MAX_ADC = cfg.THROTTLE_MAX_ADC;
@@ -308,7 +317,8 @@ void saveConfig() {
     cfg.RAMP_UP_RATE = RAMP_UP_RATE;
     cfg.RAMP_DOWN_RATE = RAMP_DOWN_RATE;
 
-    cfg.trim = trim;
+    cfg.LeftTrim = LEFT_TRIM;
+    cfg.RightTrim= RIGHT_TRIM;
 
     cfg.THROTTLE_MIN_ADC = THROTTLE_MIN_ADC;
     cfg.THROTTLE_MAX_ADC = THROTTLE_MAX_ADC;
@@ -326,13 +336,18 @@ bool loadConfig() {
 
     if (cfg.header.version != PARAM_VERSION) 
     {
-          Serial.println("Unknown config version");
+          char buffer[200];
+          sprintf(buffer,"ExptdVer: %d GotVer:%d Using defaults", PARAM_VERSION, cfg.header.version);
+          loadDefaults();
+          saveConfig();
           return false;
     }
 
     if (calculateCRC(cfg) != cfg.header.crc)
     {
-      Serial.println("Config load failed CRC");
+      Serial.println("Config load failed CRC. USing defaults");
+      loadDefaults();
+      saveConfig();
       return false;
     }      
 
@@ -354,7 +369,9 @@ void loadDefaults() {
     RAMP_UP_RATE = 0.05f;
     RAMP_DOWN_RATE = 0.02f;
 
-    trim = 0.0f;
+    LEFT_TRIM = 1.0f;
+    RIGHT_TRIM = 1.0f;
+
 
     THROTTLE_MIN_ADC = 177;
     THROTTLE_MAX_ADC = 808;
@@ -608,8 +625,8 @@ void loop() {
 
     currentOutput += (target - currentOutput) * rampRate;
 
-    float leftSpeed  = currentOutput * (1.0f + trim);
-    float rightSpeed = currentOutput * (1.0f - trim);
+    float leftSpeed  = currentOutput * LEFT_TRIM;
+    float rightSpeed = currentOutput *  RIGHT_TRIM;
 
     setTrackSpeed(0, leftSpeed);
     setTrackSpeed(1, rightSpeed);
