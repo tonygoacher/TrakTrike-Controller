@@ -484,6 +484,12 @@ void updateDACDefaults() {
     Serial.println("DAC defaults stored (Adafruit)");
 }
 
+// Returns 0 if brake is applied
+int brakeOff()
+{
+    return digitalRead(BRAKE) == HIGH;
+}
+
 // =====================
 // TRACK OUTPUT
 // =====================
@@ -660,6 +666,8 @@ void setup() {
     //Wire.begin();
     delay(100);
     Serial.println("Running");
+    pinMode(BRAKE,INPUT_PULLUP);
+    pinMode(REVERSE,INPUT_PULLUP);
    
     if (!mcp.begin()) {
         Serial.println("MCP4728 not found!");
@@ -679,7 +687,8 @@ void setup() {
 
 bool IsSlowProfile()
 {
-    return false;
+    bool reverse = digitalRead(REVERSE) == LOW;
+    return reverse;
 }
 
 // =====================
@@ -707,8 +716,8 @@ void loop() {
 
     currentOutput += (target - currentOutput) * rampRate;
 
-    float leftSpeed  = currentOutput * LEFT_TRIM;
-    float rightSpeed = currentOutput *  RIGHT_TRIM;
+    float leftSpeed  = currentOutput * LEFT_TRIM * brakeOff();
+    float rightSpeed = currentOutput *  RIGHT_TRIM * brakeOff();
 
     setTrackSpeed(TRACK_ID::LEFT, leftSpeed);
     setTrackSpeed(TRACK_ID::RIGHT, rightSpeed);
