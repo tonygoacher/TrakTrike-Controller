@@ -568,9 +568,32 @@ void handleSerial() {
 void printParams() {
     Serial.println("--- Params ---");
     Serial.print("LEFT_DAC_START: "); Serial.println(LEFT_DAC_START);
-    Serial.print("RIGHT_DAC_START: "); Serial.println(LEFT_DAC_START);
+    Serial.print("RIGHT_DAC_START: "); Serial.println(RIGHT_DAC_START);
     Serial.print("Throttle Min: "); Serial.println(THROTTLE_MIN_ADC);
     Serial.print("Throttle Max: "); Serial.println(THROTTLE_MAX_ADC);
+}
+
+void setDACStart(TRACK_ID track, int startValue)
+{
+    const char* text = "LEFT DAC START";
+    if(track == LEFT)
+    {
+        LEFT_DAC_START = startValue;  
+    }
+    else
+    {
+        RIGHT_DAC_START = startValue;
+        text = "RIGHT DAC START";
+    }
+
+    float volts = 4.7f * startValue / 4095.0f;
+
+    Serial.print(text);Serial.print(" :");
+    Serial.print(startValue);
+
+    Serial.print("  Voltage: ");
+    Serial.print(volts, 2);
+    Serial.println("V");
 }
 
 void processCommand(String cmd)
@@ -591,41 +614,21 @@ void processCommand(String cmd)
 
     if (cmd.startsWith("startl ")) 
     {
-
-        LEFT_DAC_START = cmd.substring(6).toInt();
-
-
-
-        float volts = 4.7f * LEFT_DAC_START / 4095.0f;
-
-        Serial.print("LEFT_DAC_START: ");
-        Serial.print(LEFT_DAC_START);
-
-        Serial.print("  Voltage: ");
-        Serial.print(volts, 2);
-        Serial.println("V");
-
+        cmd.substring(6).toInt();
+        setDACStart(TRACK_ID::LEFT,cmd.substring(6).toInt());
         return;
     }
 
      if (cmd.startsWith("startr ")) 
     {
 
-        RIGHT_DAC_START = cmd.substring(6).toInt();
-
-
-
-        float volts = 4.7f * RIGHT_DAC_START / 4095.0f;
-
-        Serial.print("RIGHT_DAC_START: ");
-        Serial.print(RIGHT_DAC_START);
-
-        Serial.print("  Voltage: ");
-        Serial.print(volts, 2);
-        Serial.println("V");
+        cmd.substring(6).toInt();
+        setDACStart(TRACK_ID::RIGHT,cmd.substring(6).toInt());
 
         return;
     }
+
+    Serial.print("UNKNOWN COMMAND "); Serial.println(cmd.c_str());
 }
 
 // =====================
