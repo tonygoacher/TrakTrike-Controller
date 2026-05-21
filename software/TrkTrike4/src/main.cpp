@@ -357,16 +357,15 @@ bool loadConfig() {
 
     if (cfg.header.version != PARAM_VERSION) 
     {
-          char buffer[200];
-          sprintf(buffer,"ExptdVer: %d GotVer:%d Using defaults", PARAM_VERSION, cfg.header.version);
-          loadDefaults();
-          saveConfig();
-          return false;
+        Serial.println("Config version mismatch. Using defaults");
+        loadDefaults();
+        saveConfig();
+        return false;
     }
 
     if (calculateCRC(cfg) != cfg.header.crc)
     {
-      Serial.println("Config load failed CRC. USing defaults");
+      Serial.println("Config load failed CRC. Using defaults");
       loadDefaults();
       saveConfig();
       return false;
@@ -571,6 +570,8 @@ void printParams() {
     Serial.print("RIGHT_DAC_START: "); Serial.println(RIGHT_DAC_START);
     Serial.print("Throttle Min: "); Serial.println(THROTTLE_MIN_ADC);
     Serial.print("Throttle Max: "); Serial.println(THROTTLE_MAX_ADC);
+    Serial.print("Trim Left: "); Serial.println(LEFT_TRIM);
+    Serial.print("Trim Right: "); Serial.println(RIGHT_TRIM);
 }
 
 void setDACStart(TRACK_ID track, int startValue)
@@ -596,6 +597,20 @@ void setDACStart(TRACK_ID track, int startValue)
     Serial.println("V");
 }
 
+void setTrim(TRACK_ID trackId, String* cmd)
+{
+    float trim = cmd->substring(6).toFloat();
+    Serial.print("Track : "); Serial.print(trackId); Serial.print(" trim: "); Serial.println(trim);
+    if(trackId == LEFT)
+    {
+        LEFT_TRIM = trim;
+    }
+    else
+    {
+        RIGHT_TRIM = trim;
+    }
+}
+
 void processCommand(String cmd)
  {
   
@@ -603,7 +618,7 @@ void processCommand(String cmd)
     Serial.println(cmd.c_str());
 
     if (cmd == "save") { saveConfig(); updateDACDefaults(); return; }
-    if (cmd == "load") { if (!loadConfig()) loadDefaults(); configureThrottle(); return; }
+    if (cmd == "load") { loadConfig(); configureThrottle(); return; }
     if (cmd == "defaults") { loadDefaults(); configureThrottle(); return; }
 
     if (cmd == "cal min") { captureMin(); return; }
@@ -614,16 +629,21 @@ void processCommand(String cmd)
 
     if (cmd.startsWith("startl ")) 
     {
-        cmd.substring(6).toInt();
-        setDACStart(TRACK_ID::LEFT,cmd.substring(6).toInt());
+          setDACStart(TRACK_ID::LEFT,cmd.substring(6).toInt());
         return;
     }
 
-     if (cmd.startsWith("startr ")) 
+    if (cmd.startsWith("startr ")) 
     {
-
-        cmd.substring(6).toInt();
         setDACStart(TRACK_ID::RIGHT,cmd.substring(6).toInt());
+
+        return;
+    }
+
+    if (cmd.startsWith("triml ") || cmd.startsWith("trimr ")) 
+    {
+        TRACK_ID trackId = cmd.startsWith("triml ") ? LEFT : RIGHT;
+        setTrim(trackId, &cmd);
 
         return;
     }
@@ -644,10 +664,9 @@ void setup() {
     if (!mcp.begin()) {
         Serial.println("MCP4728 not found!");
         while (1);
-
     }
 
-    if (!loadConfig()) loadDefaults();
+    loadConfig();
     Serial.println("Config loaded");
 
     configureThrottle();
