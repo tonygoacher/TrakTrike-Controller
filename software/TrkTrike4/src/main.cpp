@@ -440,7 +440,7 @@ void captureMax() {
 void applyCalibration() {
 
     if (throttleCal.maxADC <= throttleCal.minADC) {
-        Serial.println("Invalid calibration");
+        Serial.print("Invalid calibration. Min:");Serial.println(throttleCal.minADC); Serial.print (" Max:"); Serial.println(throttleCal.maxADC);
         return;
     }
 
