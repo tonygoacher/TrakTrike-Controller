@@ -17,7 +17,7 @@ Adafruit_MCP4728 mcp;
 // CONFIG
 // =====================
 #define EEPROM_ADDR 0
-#define PARAM_VERSION 2
+#define PARAM_VERSION 3
 
 struct DriveProfile
 {
@@ -65,6 +65,8 @@ struct Config {
     int LEFT_DAC_MAX;
     int RIGHT_DAC_START;
     int RIGHT_DAC_MAX;
+    int LEFT_DEFAULT;
+    int RIGHT_DEFAULT;
 
     float THROTTLE_DEADBAND;
     float TAKEUP_END;
@@ -77,6 +79,7 @@ struct Config {
 
     int THROTTLE_MIN_ADC;
     int THROTTLE_MAX_ADC;
+    uint8_t DAC_DEFAULT_WRITTTEN;
 };
 
 // =====================
@@ -99,6 +102,7 @@ float RIGHT_TRIM;
 
 int THROTTLE_MIN_ADC;
 int THROTTLE_MAX_ADC;
+uint8_t DAC_DEFAULT_WRITTEN;
 
 // Declare forward refs
 void  loadDefaults();
@@ -314,6 +318,8 @@ void applyConfig(const Config &cfg) {
     THROTTLE_MIN_ADC = cfg.THROTTLE_MIN_ADC;
     THROTTLE_MAX_ADC = cfg.THROTTLE_MAX_ADC;
 
+    DAC_DEFAULT_WRITTEN = cfg.DAC_DEFAULT_WRITTTEN;
+
     printConfig(cfg);
 }
 
@@ -343,6 +349,8 @@ void saveConfig() {
 
     cfg.THROTTLE_MIN_ADC = THROTTLE_MIN_ADC;
     cfg.THROTTLE_MAX_ADC = THROTTLE_MAX_ADC;
+
+    cfg.DAC_DEFAULT_WRITTTEN = DAC_DEFAULT_WRITTEN;
 
     cfg.header.crc = calculateCRC(cfg);
 
@@ -397,6 +405,8 @@ void loadDefaults() {
 
     THROTTLE_MIN_ADC = 177;
     THROTTLE_MAX_ADC = 808;
+
+    DAC_DEFAULT_WRITTEN = 0;
 
     Serial.println("Loaded defaults");
     printParams();
@@ -460,8 +470,7 @@ int lastStoredDACStartRight = -1;
 void updateDACDefaults() {
 
 
-//    if(lastStoredDACStartLeft == LEFT_DAC_START && lastStoredDACStartRight == RIGHT_DAC_START)
-  //      return;
+    Serial.println("Updating DAC defaults");
 
     // Set outputs first
     mcp.setChannelValue(MCP4728_CHANNEL_A, 0);//LEFT_DAC_START);
@@ -685,11 +694,22 @@ void setup() {
     configureThrottle();
     Serial.println("Throttle configured");
  
-    updateDACDefaults();
+   
 
     delay(500);
 
     printParams();
+
+    if(DAC_DEFAULT_WRITTEN == 0)
+    {
+         updateDACDefaults();
+         DAC_DEFAULT_WRITTEN = 0xff;
+         saveConfig();
+    }
+    else
+    {
+        Serial.println("DAC defaults aleady set");
+    }
 }
 
 bool IsSlowProfile()
