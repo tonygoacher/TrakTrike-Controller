@@ -460,12 +460,12 @@ int lastStoredDACStartRight = -1;
 void updateDACDefaults() {
 
 
-    if(lastStoredDACStartLeft == LEFT_DAC_START && lastStoredDACStartRight == RIGHT_DAC_START)
-        return;
+//    if(lastStoredDACStartLeft == LEFT_DAC_START && lastStoredDACStartRight == RIGHT_DAC_START)
+  //      return;
 
     // Set outputs first
-    mcp.setChannelValue(MCP4728_CHANNEL_A, LEFT_DAC_START);
-    mcp.setChannelValue(MCP4728_CHANNEL_B, RIGHT_DAC_START);
+    mcp.setChannelValue(MCP4728_CHANNEL_A, 0);//LEFT_DAC_START);
+    mcp.setChannelValue(MCP4728_CHANNEL_B, 0);// RIGHT_DAC_START
   
     Serial.print("Default LEFT_DAC_START ");
     Serial.println(LEFT_DAC_START);
@@ -663,8 +663,8 @@ void processCommand(String cmd)
 void setup() {
 
     Serial.begin(115200);
-    //Wire.begin();
-    delay(100);
+
+  
     Serial.println("Running");
     pinMode(BRAKE,INPUT_PULLUP);
     pinMode(REVERSE,INPUT_PULLUP);
@@ -674,6 +674,11 @@ void setup() {
         while (1);
     }
 
+    mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
+    mcp.setChannelValue(MCP4728_CHANNEL_B, 0);
+
+    delay(3000);
+
     loadConfig();
     Serial.println("Config loaded");
 
@@ -681,6 +686,8 @@ void setup() {
     Serial.println("Throttle configured");
  
     updateDACDefaults();
+
+    delay(500);
 
     printParams();
 }
@@ -700,6 +707,7 @@ void loop() {
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
+   // throttleVal = 0.1f;
 
     DriveProfile* profile;
 
@@ -728,6 +736,7 @@ void loop() {
         Serial.print(leftSpeed);
         Serial.print(" Track R: ");
         Serial.println(rightSpeed); 
+        Serial.print("Throttle :"); Serial.println(throttleVal);
     }
 
 
