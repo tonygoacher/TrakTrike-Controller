@@ -3,6 +3,9 @@
 #include <EEPROM.h>
 #include <Wire.h>
 #include <stddef.h>
+
+
+#include <LiquidCrystal_I2C.h>
 #include <math.h>
 #include <Adafruit_MCP4728.h>
 #include "ports.h"
@@ -18,6 +21,8 @@ Adafruit_MCP4728 mcp;
 // =====================
 #define EEPROM_ADDR 0
 #define PARAM_VERSION 3
+
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 struct DriveProfile
 {
@@ -50,6 +55,17 @@ enum TRACK_ID
     LEFT = 0,
     RIGHT = 1
 };
+
+enum SystemMode
+{
+    SLOWMODE = 1,
+    BRAKEMODE = 2,
+    REVERSEMODE = 4,
+    NULL_MODE  = 0
+};
+
+uint8_t systemMode = SystemMode::NULL_MODE;
+uint8_t newSystemMode = SystemMode::SLOWMODE;
 
 
 typedef struct {
@@ -686,6 +702,10 @@ void setup() {
     mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
     mcp.setChannelValue(MCP4728_CHANNEL_B, 0);
 
+    lcd.init();
+    lcd.backlight();
+    lcd.print(" TrakTrike v4.0");
+
     delay(3000);
 
     loadConfig();
@@ -715,7 +735,58 @@ void setup() {
 bool IsSlowProfile()
 {
     bool reverse = digitalRead(REVERSE) == LOW;
-    return reverse;
+    if(reverse)
+    {
+        newSystemMode |= SystemMode::REVERSEMODE;
+    }
+    else
+    {
+    
+        newSystemMode &= ~SystemMode::REVERSEMODE;
+    }
+    
+    return reverse | (systemMode & SystemMode::SLOWMODE);
+}
+
+void displayNewSystemMode()
+{
+    if(!brakeOff())
+    {
+        newSystemMode != SystemMode::BRAKEMODE;
+    }
+    else
+    {
+        newSystemMode &= ~SystemMode::BRAKEMODE; 
+    }
+
+    if(newSystemMode != systemMode)
+    {
+        systemMode = newSystemMode;
+        lcd.setCursor(0,1);
+
+        if(systemMode == SystemMode::BRAKEMODE)
+        {
+            lcd.print("Mode: BRAKE     ");
+        }
+
+        if(systemMode == SystemMode::SLOW)
+        {
+            lcd.print("Mode: SLOW      ");
+        }
+
+        
+        if(systemMode == SystemMode::NORMAL)
+        {
+            lcd.print("Mode: NORMAL    ");
+        }
+
+ 
+
+        if(systemMode == SystemMode::REVERSEMODE)
+        {
+            lcd.print("Mode: REVERSE   ");
+        }
+    }
 }
 
 // =====================
@@ -724,6 +795,8 @@ bool IsSlowProfile()
 
 void loop() {
 
+
+    displayNewSystemMode();
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
