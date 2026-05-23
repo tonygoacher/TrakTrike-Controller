@@ -17,7 +17,8 @@ Adafruit_MCP4728 mcp;
 // CONFIG
 // =====================
 #define EEPROM_ADDR 0
-#define PARAM_VERSION 3
+#define PARAM_VERSION 5
+#define NUM_TRIM_VALUES 10
 
 struct DriveProfile
 {
@@ -43,6 +44,21 @@ DriveProfile slowProfile =
     1.5f,   // softer curve
     0.03f,  // gentler ramp
     0.8f    // HArd decel
+};
+
+// DEfault trim calibration values
+const float defaultCalibration[NUM_TRIM_VALUES] = 
+{
+    0.17,
+    -0.16,
+    0.03,
+    0.08,
+    0.12,
+    0.19,
+    0.16,
+    0.10,
+    0.17,
+    0.17
 };
 
 enum TRACK_ID
@@ -74,8 +90,8 @@ struct Config {
     float RAMP_UP_RATE;
     float RAMP_DOWN_RATE;
 
-    float LeftTrim;
-    float RightTrim;
+    float TRIM_VALUES[NUM_TRIM_VALUES];
+
 
     int THROTTLE_MIN_ADC;
     int THROTTLE_MAX_ADC;
@@ -97,8 +113,10 @@ float TAKEUP_END;
 float RAMP_UP_RATE;
 float RAMP_DOWN_RATE;
 
-float LEFT_TRIM;
-float RIGHT_TRIM;
+
+float TRIM_VALUES[NUM_TRIM_VALUES];
+
+float FORCE_OUTPUT  = 0.0f;
 
 int THROTTLE_MIN_ADC;
 int THROTTLE_MAX_ADC;
@@ -106,6 +124,17 @@ uint8_t DAC_DEFAULT_WRITTEN;
 
 // Declare forward refs
 void  loadDefaults();
+
+
+void printTrimValues(const char * text, const float * v)
+{
+    Serial.println(text);
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+    {   
+        Serial.println(*v);
+        v++;
+    }
+}
 
 // =====================
 // THROTTLE CLASS
@@ -260,13 +289,9 @@ void printConfig(const Config& cfg)
 
     Serial.println();
 
-    Serial.print("Left trim: ");
-    Serial.println(cfg.LeftTrim, 4);
-
-    Serial.print("Right trim: ");
-    Serial.println(cfg.RightTrim, 4);
-
-    Serial.println();
+    Serial.println("Trims:");
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+        Serial.println(cfg.TRIM_VALUES[i]);
 
     Serial.print("THROTTLE_MIN_ADC: ");
     Serial.println(cfg.THROTTLE_MIN_ADC);
@@ -312,8 +337,9 @@ void applyConfig(const Config &cfg) {
     RAMP_UP_RATE = cfg.RAMP_UP_RATE;
     RAMP_DOWN_RATE = cfg.RAMP_DOWN_RATE;
 
-    LEFT_TRIM = cfg.LeftTrim;
-    RIGHT_TRIM = cfg.RightTrim;
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+        TRIM_VALUES[i] = cfg.TRIM_VALUES[i];
+
 
     THROTTLE_MIN_ADC = cfg.THROTTLE_MIN_ADC;
     THROTTLE_MAX_ADC = cfg.THROTTLE_MAX_ADC;
@@ -344,8 +370,10 @@ void saveConfig() {
     cfg.RAMP_UP_RATE = RAMP_UP_RATE;
     cfg.RAMP_DOWN_RATE = RAMP_DOWN_RATE;
 
-    cfg.LeftTrim = LEFT_TRIM;
-    cfg.RightTrim= RIGHT_TRIM;
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+    {
+        cfg.TRIM_VALUES[i] = TRIM_VALUES[i];
+    }
 
     cfg.THROTTLE_MIN_ADC = THROTTLE_MIN_ADC;
     cfg.THROTTLE_MAX_ADC = THROTTLE_MAX_ADC;
@@ -399,8 +427,10 @@ void loadDefaults() {
     RAMP_UP_RATE = 0.05f;
     RAMP_DOWN_RATE = 0.02f;
 
-    LEFT_TRIM = 1.0f;
-    RIGHT_TRIM = 1.0f;
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+    {
+        TRIM_VALUES[i] = defaultCalibration[i];
+    }
 
 
     THROTTLE_MIN_ADC = 177;
@@ -585,8 +615,10 @@ void printParams() {
     Serial.print("RIGHT_DAC_START: "); Serial.println(RIGHT_DAC_START);
     Serial.print("Throttle Min: "); Serial.println(THROTTLE_MIN_ADC);
     Serial.print("Throttle Max: "); Serial.println(THROTTLE_MAX_ADC);
-    Serial.print("Trim Left: "); Serial.println(LEFT_TRIM);
-    Serial.print("Trim Right: "); Serial.println(RIGHT_TRIM);
+    Serial.println("Trim Values:");
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+        Serial.println(TRIM_VALUES[i]);
+
 }
 
 void setDACStart(TRACK_ID track, int startValue)
@@ -612,18 +644,120 @@ void setDACStart(TRACK_ID track, int startValue)
     Serial.println("V");
 }
 
-void setTrim(TRACK_ID trackId, String* cmd)
+const float trimThrottlePoints[NUM_TRIM_VALUES] =
 {
-    float trim = cmd->substring(6).toFloat();
-    Serial.print("Track : "); Serial.print(trackId); Serial.print(" trim: "); Serial.println(trim);
-    if(trackId == LEFT)
+    0.00,
+    0.03,
+    0.05,
+    0.08,
+    0.12,
+    0.18,
+    0.28,
+    0.45,
+    0.70,
+    1.00
+};
+
+
+
+void calibrate(float throttle,
+               float leftRPM,
+               float rightRPM)
+{
+    Serial.println();
+    Serial.println(F("=== CALIBRATION ==="));
+
+    Serial.print(F("Throttle: "));
+    Serial.println(throttle, 3);
+
+    Serial.print(F("Left RPM: "));
+    Serial.println(leftRPM, 1);
+
+    Serial.print(F("Right RPM: "));
+    Serial.println(rightRPM, 1);
+
+    // Sanity check
+    if (leftRPM < 1.0f || rightRPM < 1.0f)
     {
-        LEFT_TRIM = trim;
+        Serial.println(F("Calibration aborted: RPM too low"));
+        return;
+    }
+
+    // Find nearest trim table point
+    int bestIndex = -1;
+    float bestError = 999.0f;
+
+    for (int i = 0; i < NUM_TRIM_VALUES; i++)
+    {
+        float error = abs(throttle - trimThrottlePoints[i]);
+
+        Serial.print(F("i="));
+        Serial.print(i);
+
+        Serial.print(F(" point="));
+        Serial.print(trimThrottlePoints[i], 3);
+
+        Serial.print(F(" error="));
+        Serial.println(error, 3);
+
+        if (error < bestError)
+        {
+            bestError = error;
+            bestIndex = i;
+        }
+    }
+
+    // Safety check
+    if (bestIndex < 0)
+    {
+        Serial.println(F("Calibration aborted: no valid index"));
+        return;
+    }
+
+    // Require throttle to be reasonably close
+    if (bestError > 0.02f)
+    {
+        Serial.println(F("Calibration aborted: throttle not near trim point"));
+
+        Serial.print(F("Nearest point: "));
+        Serial.println(trimThrottlePoints[bestIndex], 3);
+
+        return;
+    }
+
+    // Calculate signed trim
+    //
+    // Positive trim  -> slow RIGHT track
+    // Negative trim  -> slow LEFT track
+    //
+
+    float trim = 0.0f;
+
+    if (rightRPM > leftRPM)
+    {
+        trim = 1.0f - (leftRPM / rightRPM);
     }
     else
     {
-        RIGHT_TRIM = trim;
+        trim = -(1.0f - (rightRPM / leftRPM));
     }
+
+    // Store trim
+    TRIM_VALUES[bestIndex] = trim;
+
+    // Report result
+    Serial.println();
+    Serial.print(F("Stored trim at index "));
+    Serial.println(bestIndex);
+
+    Serial.print(F("Trim point: "));
+    Serial.println(trimThrottlePoints[bestIndex], 3);
+
+    Serial.print(F("Trim value: "));
+    Serial.println(trim, 4);
+
+    Serial.println(F("==================="));
+    Serial.println();
 }
 
 void processCommand(String cmd)
@@ -642,6 +776,12 @@ void processCommand(String cmd)
 
     if (cmd == "show") { printParams(); return; }
 
+    if(cmd.startsWith("force "))
+    {
+        FORCE_OUTPUT = cmd.substring(6).toFloat();
+        return;
+    }
+
     if (cmd.startsWith("startl ")) 
     {
           setDACStart(TRACK_ID::LEFT,cmd.substring(6).toInt());
@@ -654,12 +794,33 @@ void processCommand(String cmd)
 
         return;
     }
-
-    if (cmd.startsWith("triml ") || cmd.startsWith("trimr ")) 
+    //                     111111111
+    //           0123456789012345678          
+    // Format is calibrate llll rrrr
+    if (cmd.startsWith("calibrate")) 
     {
-        TRACK_ID trackId = cmd.startsWith("triml ") ? LEFT : RIGHT;
-        setTrim(trackId, &cmd);
+        if(cmd == "calibrate")
+        {
+            printTrimValues("Current Trim Values", TRIM_VALUES);
+            return;
+        }
 
+        int leftSpeed = cmd.substring(10).toInt();
+        int indexRight = cmd.indexOf(' ', 10);  // Get index of next space
+        int rightSpeed = cmd.substring(indexRight+1).toInt();
+
+        Serial.print("Cal Left: "); Serial.print(leftSpeed); Serial.print("  Right: ");Serial.println(rightSpeed);
+        
+        float commandedThrottle;
+        if (FORCE_OUTPUT)
+        {
+            commandedThrottle = FORCE_OUTPUT;
+        }
+        else
+        {
+            commandedThrottle = throttle.GetThrottle();
+        }
+        calibrate(commandedThrottle, leftSpeed,rightSpeed);
         return;
     }
 
@@ -718,6 +879,46 @@ bool IsSlowProfile()
     return reverse;
 }
 
+int getTrimIndex(float throttle)
+{
+    float scaled = throttle * (NUM_TRIM_VALUES - 1);
+
+    // Lower table index
+    int index = (int)scaled;
+    return index;
+}
+
+
+
+
+float getInterpolatedTrim(float throttle)
+{
+    // Clamp input
+    if (throttle < trimThrottlePoints[0])
+        return TRIM_VALUES[0];
+
+    if (throttle >= trimThrottlePoints[NUM_TRIM_VALUES - 1])
+        return TRIM_VALUES[NUM_TRIM_VALUES - 1];
+
+    // Find containing segment
+    for (int i = 0; i < (NUM_TRIM_VALUES - 1); i++)
+    {
+        float t0 = trimThrottlePoints[i];
+        float t1 = trimThrottlePoints[i + 1];
+
+        if (throttle >= t0 && throttle <= t1)
+        {
+            float frac = (throttle - t0) / (t1 - t0);
+
+            return TRIM_VALUES[i] +
+                   (TRIM_VALUES[i + 1] - TRIM_VALUES[i]) * frac;
+        }
+    }
+
+    // Should never happen
+    return 0.0f;
+}
+
 // =====================
 // LOOP
 // =====================
@@ -744,19 +945,48 @@ void loop() {
 
     currentOutput += (target - currentOutput) * rampRate;
 
-    float leftSpeed  = currentOutput * LEFT_TRIM * brakeOff();
-    float rightSpeed = currentOutput *  RIGHT_TRIM * brakeOff();
 
-    setTrackSpeed(TRACK_ID::LEFT, leftSpeed);
-    setTrackSpeed(TRACK_ID::RIGHT, rightSpeed);
+    
+    if(!brakeOff())
+    {
+        currentOutput = 0.0f;
+    }
+
+  
+    float trim = getInterpolatedTrim(currentOutput);
+
+        
+    if(FORCE_OUTPUT > 0.0f)
+    {
+        currentOutput = FORCE_OUTPUT;
+        trim = 0.0f;
+    }
+
+    float left  = currentOutput;
+    float right = currentOutput;
+
+    if (trim > 0.0f)
+    {
+        right *= (1.0f - trim);
+    }
+    else if (trim < 0.0f)
+    {
+        left *= (1.0f + trim); // trim is negative
+    }
+
+
+    setTrackSpeed(TRACK_ID::LEFT, left);
+    setTrackSpeed(TRACK_ID::RIGHT, right);
     if(printPacer.Pace())
     {
 
         Serial.print("Track L: ");
-        Serial.print(leftSpeed);
+        Serial.print(left);
         Serial.print(" Track R: ");
-        Serial.println(rightSpeed); 
-        Serial.print("Throttle :"); Serial.println(throttleVal);
+        Serial.println(right); 
+        Serial.print("Throttle :"); Serial.println(currentOutput);
+        Serial.print("Trim index :"); Serial.println(getTrimIndex(currentOutput));
+        Serial.print("trim: "); Serial.println(trim);
     }
 
 
