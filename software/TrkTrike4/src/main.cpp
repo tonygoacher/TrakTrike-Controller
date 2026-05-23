@@ -10,6 +10,7 @@
 #include <Adafruit_MCP4728.h>
 #include "ports.h"
 #include "Pacer.h"
+#include "Switch.h"
 
 // =====================
 // MCP4728
@@ -34,6 +35,7 @@ struct DriveProfile
 };
 
 Pacer printPacer(true,1000);
+
 
 DriveProfile normalProfile =
 {
@@ -77,11 +79,14 @@ enum SystemMode
     SLOWMODE = 1,
     BRAKEMODE = 2,
     REVERSEMODE = 4,
-    NULL_MODE  = 0
+    NULLMODE  = 0,
+
+    INIT = 0xff
+
 };
 
-uint8_t systemMode = SystemMode::NULL_MODE;
-uint8_t newSystemMode = SystemMode::SLOWMODE;
+uint8_t systemMode = SystemMode::INIT;
+uint8_t newSystemMode = SystemMode::NULLMODE;   // This will be forced into system mode on first loop
 
 
 typedef struct {
@@ -251,6 +256,7 @@ ThrottleCal throttleCal;
 // =====================
 float currentOutput = 0.0f;
 String inputString = "";
+Switch modeSwitch(MODE);
 
 // =====================
 // FORWARD DECLARATIONS
@@ -854,9 +860,11 @@ void setup() {
     Serial.println("Running");
     pinMode(BRAKE,INPUT_PULLUP);
     pinMode(REVERSE,INPUT_PULLUP);
-   
+      
     if (!mcp.begin()) {
         Serial.println("MCP4728 not found!");
+        lcd.setCursor(0,1);
+        lcd.print("MCP4728 failed!");
         while (1);
     }
 
@@ -866,6 +874,8 @@ void setup() {
     lcd.init();
     lcd.backlight();
     lcd.print(" TrakTrike v4.0");
+    lcd.setCursor(0,1);
+    lcd.print("Initialising...");
 
     delay(3000);
 
@@ -911,42 +921,35 @@ bool IsSlowProfile()
 
 void displayNewSystemMode()
 {
-    if(!brakeOff())
-    {
-        newSystemMode != SystemMode::BRAKEMODE;
-    }
-    else
-    {
-        newSystemMode &= ~SystemMode::BRAKEMODE; 
-    }
+
 
     if(newSystemMode != systemMode)
     {
+
         systemMode = newSystemMode;
         lcd.setCursor(0,1);
 
-        if(systemMode == SystemMode::BRAKEMODE)
+        if(systemMode & SystemMode::BRAKEMODE)
         {
             lcd.print("Mode: BRAKE     ");
+            return;
         }
 
-        if(systemMode == SystemMode::SLOW)
-        {
-            lcd.print("Mode: SLOW      ");
-        }
-
-        
-        if(systemMode == SystemMode::NORMAL)
-        {
-            lcd.print("Mode: NORMAL    ");
-        }
-
- 
-
-        if(systemMode == SystemMode::REVERSEMODE)
+        if(systemMode & SystemMode::REVERSEMODE)
         {
             lcd.print("Mode: REVERSE   ");
+            return;
         }
+
+        if(systemMode & SystemMode::SLOWMODE)
+        {
+            lcd.print("Mode: SLOW      ");
+            return;
+        }
+        
+
+        lcd.print("Mode: NORMAL    ");   
+
     }
 }
 
@@ -996,6 +999,14 @@ float getInterpolatedTrim(float throttle)
 
 void loop() {
 
+    if(!brakeOff())
+    {
+        newSystemMode |= SystemMode::BRAKEMODE;
+    }
+    else
+    {
+        newSystemMode &= ~SystemMode::BRAKEMODE; 
+    }
 
     displayNewSystemMode();
     handleSerial();
@@ -1029,10 +1040,10 @@ void loop() {
     float trim = getInterpolatedTrim(currentOutput);
 
         
-    if(FORCE_OUTPUT > 0.0f)
+    if(FORCE_OUTPUT > 0.0f)     // This is used when calibrating the trim.
     {
         currentOutput = FORCE_OUTPUT;
-        trim = 0.0f;
+        trim = 0.0f;            // Do not apply trim in calibration mode
     }
 
     float left  = currentOutput;
@@ -1046,22 +1057,27 @@ void loop() {
     {
         left *= (1.0f + trim); // trim is negative
     }
-
+   
 
     setTrackSpeed(TRACK_ID::LEFT, left);
     setTrackSpeed(TRACK_ID::RIGHT, right);
+
     if(printPacer.Pace())
     {
-
+     
         Serial.print("Track L: ");
         Serial.print(left);
         Serial.print(" Track R: ");
         Serial.println(right); 
-        Serial.print("Throttle :"); Serial.println(currentOutput);
-        Serial.print("Trim index :"); Serial.println(getTrimIndex(currentOutput));
-        Serial.print("trim: "); Serial.println(trim);
+     
+      //  Serial.print("Throttle :"); Serial.println(currentOutput);
+      //         return;
     }
 
+    if(modeSwitch.Pressed())
+    {
+        newSystemMode ^= SystemMode::SLOWMODE;
+    }
 
 
 }
