@@ -11,6 +11,9 @@
 #include "ports.h"
 
 #include "Switch.h"
+#include "SmoothBarGraph.h"
+
+
 
 // =====================
 // MCP4728
@@ -25,6 +28,7 @@ Adafruit_MCP4728 mcp;
 #define NUM_TRIM_VALUES 10
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+SmoothBarGraph barGraph(lcd,6,1,10);
 
 struct DriveProfile
 {
@@ -900,6 +904,8 @@ void setup() {
         Serial.println(F("DAC defaults aleady set"));
     }
     Serial.println(F("System OK"));
+
+    barGraph.begin();
 }
 
 bool IsSlowProfile()
@@ -930,24 +936,24 @@ void displayNewSystemMode()
 
         if(systemMode & SystemMode::BRAKEMODE)
         {
-            lcd.print(F("Mode: BRAKE     "));
+            lcd.print(F("BRKE "));
             return;
         }
 
         if(systemMode & SystemMode::REVERSEMODE)
         {
-            lcd.print(F("Mode: REVERSE   "));
+            lcd.print(F("RVRS "));
             return;
         }
 
         if(systemMode & SystemMode::SLOWMODE)
         {
-            lcd.print(F("Mode: SLOW      "));
+            lcd.print(F("SLOW "));
             return;
         }
         
 
-        lcd.print(F("Mode: NORMAL    "));   
+        lcd.print(F("NORM "));   
 
     }
 }
@@ -1073,6 +1079,13 @@ void loop() {
      
         
        
+    }
+
+    if(millis() % 100 == 0)
+    {
+        lcd.setCursor(5,1);
+        lcd.print(">");
+        barGraph.ShowBargraph(currentOutput);
     }
 
     if(modeSwitch.Pressed())
