@@ -57,6 +57,23 @@ DriveProfile slowProfile =
     0.8f    // HArd decel
 };
 
+
+// Use force command to set these values Then measure both motor speeds.
+// The use calibrate lefftrpm rightrpm to set the TRIM_VALUE entry. Index into TRIM_VALUE is calculated automatically
+const float trimThrottlePoints[NUM_TRIM_VALUES] =
+{
+    0.00,
+    0.03,
+    0.05,
+    0.08,
+    0.12,
+    0.18,
+    0.28,
+    0.45,
+    0.70,
+    1.00
+};
+
 // DEfault trim calibration values
 const float defaultCalibration[NUM_TRIM_VALUES] = 
 {
@@ -151,7 +168,7 @@ uint8_t DAC_DEFAULT_WRITTEN;
 void  loadDefaults();
 
 
-void printTrimValues( float v[NUM_TRIM_VALUES])
+void printTrimValues( const float v[NUM_TRIM_VALUES])
 {
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {   
@@ -666,19 +683,6 @@ void setDACStart(TRACK_ID track, int startValue)
     Serial.println("V");
 }
 
-const float trimThrottlePoints[NUM_TRIM_VALUES] =
-{
-    0.00,
-    0.03,
-    0.05,
-    0.08,
-    0.12,
-    0.18,
-    0.28,
-    0.45,
-    0.70,
-    1.00
-};
 
 
 
@@ -823,6 +827,8 @@ void processCommand(String cmd)
     {
         if(cmd == F("calibrate"))
         {
+            Serial.println("Trim throttle points:");
+            printTrimValues(trimThrottlePoints);
             Serial.println(F("Current Trim Values"));
             printTrimValues( TRIM_VALUES);
 
