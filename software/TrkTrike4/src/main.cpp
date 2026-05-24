@@ -151,10 +151,8 @@ uint8_t DAC_DEFAULT_WRITTEN;
 void  loadDefaults();
 
 
-void printTrimValues(const __FlashStringHelper * text, float v[NUM_TRIM_VALUES])
+void printTrimValues( float v[NUM_TRIM_VALUES])
 {
- 
-    Serial.println((const char *)text);
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {   
        Serial.println(v[i]);
@@ -316,7 +314,8 @@ void printConfig(const Config& cfg)
 
     Serial.println();
 
-    printTrimValues(F("Config trim values"), TRIM_VALUES);
+    Serial.println(F("Config trim values"));
+    printTrimValues( TRIM_VALUES);
     
 
     Serial.print(F("THROTTLE_MIN_ADC: "));
@@ -640,7 +639,8 @@ void printParams() {
     Serial.print(F("RIGHT_DAC_START: ")); Serial.println(RIGHT_DAC_START);
     Serial.print(F("Throttle Min: ")); Serial.println(THROTTLE_MIN_ADC);
     Serial.print(F("Throttle Max: ")); Serial.println(THROTTLE_MAX_ADC);
-    printTrimValues(F("Trims: "), TRIM_VALUES);
+    Serial.println(F("Trims: "));
+    printTrimValues(TRIM_VALUES);
 }
 
 void setDACStart(TRACK_ID track, int startValue)
@@ -823,7 +823,8 @@ void processCommand(String cmd)
     {
         if(cmd == F("calibrate"))
         {
-            printTrimValues(F("Current Trim Values"), TRIM_VALUES);
+            Serial.println(F("Current Trim Values"));
+            printTrimValues( TRIM_VALUES);
 
             return;
         }
