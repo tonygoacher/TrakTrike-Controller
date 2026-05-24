@@ -3,10 +3,14 @@
 #include <EEPROM.h>
 #include <Wire.h>
 #include <stddef.h>
+
+
+#include <LiquidCrystal_I2C.h>
 #include <math.h>
 #include <Adafruit_MCP4728.h>
 #include "ports.h"
-#include "Pacer.h"
+
+#include "Switch.h"
 
 // =====================
 // MCP4728
@@ -20,6 +24,8 @@ Adafruit_MCP4728 mcp;
 #define PARAM_VERSION 5
 #define NUM_TRIM_VALUES 10
 
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+
 struct DriveProfile
 {
     float maxOutput;
@@ -28,7 +34,8 @@ struct DriveProfile
     float rampDown;
 };
 
-Pacer printPacer(true,1000);
+
+
 
 DriveProfile normalProfile =
 {
@@ -66,6 +73,20 @@ enum TRACK_ID
     LEFT = 0,
     RIGHT = 1
 };
+
+enum SystemMode
+{
+    SLOWMODE = 1,
+    BRAKEMODE = 2,
+    REVERSEMODE = 4,
+    NULLMODE  = 0,
+
+    INIT = 0xff
+
+};
+
+uint8_t systemMode = SystemMode::INIT;
+uint8_t newSystemMode = SystemMode::NULLMODE;   // This will be forced into system mode on first loop
 
 
 typedef struct {
@@ -126,13 +147,13 @@ uint8_t DAC_DEFAULT_WRITTEN;
 void  loadDefaults();
 
 
-void printTrimValues(const char * text, const float * v)
+void printTrimValues(const __FlashStringHelper * text, float v[NUM_TRIM_VALUES])
 {
-    Serial.println(text);
+ 
+    Serial.println((const char *)text);
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {   
-        Serial.println(*v);
-        v++;
+       Serial.println(v[i]);
     }
 }
 
@@ -233,8 +254,10 @@ ThrottleCal throttleCal;
 // =====================
 // STATE
 // =====================
-float currentOutput = 0.0f;
+
 String inputString = "";
+Switch modeSwitch(MODE);
+
 
 // =====================
 // FORWARD DECLARATIONS
@@ -247,59 +270,58 @@ void printParams();
 
 void printConfig(const Config& cfg)
 {
-    Serial.println("===== CONFIG =====");
+    Serial.println(F("===== CONFIG ====="));
 
-    Serial.print("Version: ");
+    Serial.print(F("Version: "));
     Serial.println(cfg.header.version);
 
-    Serial.print("CRC: ");
+    Serial.print(F("CRC: "));
     Serial.println(cfg.header.crc);
 
     Serial.println();
 
-    Serial.print("DAC_MIN: ");
+    Serial.print(F("DAC_MIN: "));
     Serial.println(cfg.DAC_MIN);
 
-    Serial.print("LEFT DAC_START: ");
+    Serial.print(F("LEFT DAC_START: "));
     Serial.println(cfg.LEFT_DAC_START);
-    Serial.print("RIGHT DAC_START: ");
+    Serial.print(F("RIGHT DAC_START: "));
     Serial.println(cfg.RIGHT_DAC_START);    
 
-    Serial.print("LEFT_DAC_MAX: ");
+    Serial.print(F("LEFT_DAC_MAX: "));
     Serial.println(cfg.LEFT_DAC_MAX);
 
-    Serial.print("RIGHT DAC_MAX: ");
+    Serial.print(F("RIGHT DAC_MAX: "));
     Serial.println(cfg.RIGHT_DAC_MAX);
 
     Serial.println();
 
-    Serial.print("THROTTLE_DEADBAND: ");
+    Serial.print(F("THROTTLE_DEADBAND: "));
     Serial.println(cfg.THROTTLE_DEADBAND, 4);
 
-    Serial.print("TAKEUP_END: ");
+    Serial.print(F("TAKEUP_END: "));
     Serial.println(cfg.TAKEUP_END, 4);
 
     Serial.println();
 
-    Serial.print("RAMP_UP_RATE: ");
+    Serial.print(F("RAMP_UP_RATE: "));
     Serial.println(cfg.RAMP_UP_RATE, 4);
 
-    Serial.print("RAMP_DOWN_RATE: ");
+    Serial.print(F("RAMP_DOWN_RATE: "));
     Serial.println(cfg.RAMP_DOWN_RATE, 4);
 
     Serial.println();
 
-    Serial.println("Trims:");
-    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
-        Serial.println(cfg.TRIM_VALUES[i]);
+    printTrimValues(F("Config trim values"), TRIM_VALUES);
+    
 
-    Serial.print("THROTTLE_MIN_ADC: ");
+    Serial.print(F("THROTTLE_MIN_ADC: "));
     Serial.println(cfg.THROTTLE_MIN_ADC);
 
-    Serial.print("THROTTLE_MAX_ADC: ");
+    Serial.print(F("THROTTLE_MAX_ADC: "));
     Serial.println(cfg.THROTTLE_MAX_ADC);
 
-    Serial.println("==================");
+    Serial.println(F("=================="));
 }
 
 // =====================
@@ -468,18 +490,18 @@ void configureThrottle() {
 
 void captureMin() {
     throttleCal.minADC = analogRead(THROTTLE);
-    Serial.print("Min captured: "); Serial.println(throttleCal.minADC);
+    Serial.print(F("Min captured: ")); Serial.println(throttleCal.minADC);
 }
 
 void captureMax() {
     throttleCal.maxADC = analogRead(THROTTLE);
-    Serial.print("Max captured: "); Serial.println(throttleCal.maxADC);
+    Serial.print(F("Max captured: ")); Serial.println(throttleCal.maxADC);
 }
 
 void applyCalibration() {
 
     if (throttleCal.maxADC <= throttleCal.minADC) {
-        Serial.print("Invalid calibration. Min:");Serial.println(throttleCal.minADC); Serial.print (" Max:"); Serial.println(throttleCal.maxADC);
+        Serial.print(F("Invalid calibration. Min:"));Serial.println(throttleCal.minADC); Serial.print (F(" Max:")); Serial.println(throttleCal.maxADC);
         return;
     }
 
@@ -488,7 +510,7 @@ void applyCalibration() {
 
     configureThrottle();
 
-    Serial.println("Calibration applied");
+    Serial.println(F("Calibration applied"));
 }
 
 // =====================
@@ -500,16 +522,16 @@ int lastStoredDACStartRight = -1;
 void updateDACDefaults() {
 
 
-    Serial.println("Updating DAC defaults");
+    Serial.println(F("Updating DAC defaults"));
 
     // Set outputs first
     mcp.setChannelValue(MCP4728_CHANNEL_A, 0);//LEFT_DAC_START);
     mcp.setChannelValue(MCP4728_CHANNEL_B, 0);// RIGHT_DAC_START
   
-    Serial.print("Default LEFT_DAC_START ");
+    Serial.print(F("Default LEFT_DAC_START "));
     Serial.println(LEFT_DAC_START);
 
-    Serial.print("Default RIGHT_DAC_START ");
+    Serial.print(F("Default RIGHT_DAC_START "));
     Serial.println(RIGHT_DAC_START);
 
     mcp.setChannelValue(MCP4728_CHANNEL_C, 0);
@@ -520,7 +542,6 @@ void updateDACDefaults() {
     lastStoredDACStartLeft = LEFT_DAC_START;
     lastStoredDACStartRight = RIGHT_DAC_START;
 
-    Serial.println("DAC defaults stored (Adafruit)");
 }
 
 // Returns 0 if brake is applied
@@ -598,7 +619,7 @@ void handleSerial() {
         char c = Serial.read();
    
         if (c == '\n' || c == '\r') {
-            Serial.print("Input string is ");
+            Serial.print(F("Input string is "));
             Serial.println(inputString.c_str());
             processCommand(inputString);
             inputString = "";
@@ -611,35 +632,32 @@ void handleSerial() {
 
 void printParams() {
     Serial.println("--- Params ---");
-    Serial.print("LEFT_DAC_START: "); Serial.println(LEFT_DAC_START);
-    Serial.print("RIGHT_DAC_START: "); Serial.println(RIGHT_DAC_START);
-    Serial.print("Throttle Min: "); Serial.println(THROTTLE_MIN_ADC);
-    Serial.print("Throttle Max: "); Serial.println(THROTTLE_MAX_ADC);
-    Serial.println("Trim Values:");
-    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
-        Serial.println(TRIM_VALUES[i]);
-
+    Serial.print(F("LEFT_DAC_START: ")); Serial.println(LEFT_DAC_START);
+    Serial.print(F("RIGHT_DAC_START: ")); Serial.println(RIGHT_DAC_START);
+    Serial.print(F("Throttle Min: ")); Serial.println(THROTTLE_MIN_ADC);
+    Serial.print(F("Throttle Max: ")); Serial.println(THROTTLE_MAX_ADC);
+    printTrimValues(F("Trims: "), TRIM_VALUES);
 }
 
 void setDACStart(TRACK_ID track, int startValue)
 {
-    const char* text = "LEFT DAC START";
     if(track == LEFT)
     {
         LEFT_DAC_START = startValue;  
+        Serial.print(F("LEFT DAC START"));
     }
     else
     {
         RIGHT_DAC_START = startValue;
-        text = "RIGHT DAC START";
+        Serial.print(F("RIGHT DAC START"));
     }
 
     float volts = 4.7f * startValue / 4095.0f;
 
-    Serial.print(text);Serial.print(" :");
+    Serial.print(" :");
     Serial.print(startValue);
 
-    Serial.print("  Voltage: ");
+    Serial.print(F("  Voltage: "));
     Serial.print(volts, 2);
     Serial.println("V");
 }
@@ -766,29 +784,29 @@ void processCommand(String cmd)
     cmd.trim();
     Serial.println(cmd.c_str());
 
-    if (cmd == "save") { saveConfig(); updateDACDefaults(); return; }
-    if (cmd == "load") { loadConfig(); configureThrottle(); return; }
-    if (cmd == "defaults") { loadDefaults(); configureThrottle(); return; }
+    if (cmd == F("save")) { saveConfig(); updateDACDefaults(); return; }
+    if (cmd == F("load")) { loadConfig(); configureThrottle(); return; }
+    if (cmd == F("defaults")) { loadDefaults(); configureThrottle(); return; }
 
-    if (cmd == "cal min") { captureMin(); return; }
-    if (cmd == "cal max") { captureMax(); return; }
-    if (cmd == "cal apply") { applyCalibration(); saveConfig(); return; }
+    if (cmd == F("cal min")) { captureMin(); return; }
+    if (cmd == F("cal max")) { captureMax(); return; }
+    if (cmd == F("cal apply")) { applyCalibration(); saveConfig(); return; }
 
-    if (cmd == "show") { printParams(); return; }
+    if (cmd == F("show")) { printParams(); return; }
 
-    if(cmd.startsWith("force "))
+    if(cmd.startsWith(F("force ")))
     {
         FORCE_OUTPUT = cmd.substring(6).toFloat();
         return;
     }
 
-    if (cmd.startsWith("startl ")) 
+    if (cmd.startsWith(F("startl "))) 
     {
           setDACStart(TRACK_ID::LEFT,cmd.substring(6).toInt());
         return;
     }
 
-    if (cmd.startsWith("startr ")) 
+    if (cmd.startsWith(F("startr "))) 
     {
         setDACStart(TRACK_ID::RIGHT,cmd.substring(6).toInt());
 
@@ -797,11 +815,12 @@ void processCommand(String cmd)
     //                     111111111
     //           0123456789012345678          
     // Format is calibrate llll rrrr
-    if (cmd.startsWith("calibrate")) 
+    if (cmd.startsWith(F("calibrate"))) 
     {
-        if(cmd == "calibrate")
+        if(cmd == F("calibrate"))
         {
-            printTrimValues("Current Trim Values", TRIM_VALUES);
+            printTrimValues(F("Current Trim Values"), TRIM_VALUES);
+
             return;
         }
 
@@ -824,7 +843,7 @@ void processCommand(String cmd)
         return;
     }
 
-    Serial.print("UNKNOWN COMMAND "); Serial.println(cmd.c_str());
+    Serial.print(F("UNKNOWN COMMAND ")); Serial.println(cmd.c_str());
 }
 
 // =====================
@@ -835,26 +854,35 @@ void setup() {
     Serial.begin(115200);
 
   
-    Serial.println("Running");
+    Serial.println(F("Running"));
+
+     lcd.init();
+    lcd.backlight();
+    lcd.print(F(" TrakTrike v4.0 "));
+    lcd.setCursor(0,1);
+    lcd.print(F("Initialising..."));
+
     pinMode(BRAKE,INPUT_PULLUP);
     pinMode(REVERSE,INPUT_PULLUP);
-   
+      
     if (!mcp.begin()) {
-        Serial.println("MCP4728 not found!");
+        Serial.println(F("MCP4728 not found!"));
+        lcd.setCursor(0,1);
+        lcd.print(F("MCP4728 failed!"));
         while (1);
     }
 
     mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
     mcp.setChannelValue(MCP4728_CHANNEL_B, 0);
 
+
+
     delay(3000);
 
     loadConfig();
-    Serial.println("Config loaded");
+  
 
     configureThrottle();
-    Serial.println("Throttle configured");
- 
    
 
     delay(500);
@@ -869,14 +897,59 @@ void setup() {
     }
     else
     {
-        Serial.println("DAC defaults aleady set");
+        Serial.println(F("DAC defaults aleady set"));
     }
+    Serial.println(F("System OK"));
 }
 
 bool IsSlowProfile()
 {
     bool reverse = digitalRead(REVERSE) == LOW;
-    return reverse;
+    if(reverse)
+    {
+        newSystemMode |= SystemMode::REVERSEMODE;
+    }
+    else
+    {
+    
+        newSystemMode &= ~SystemMode::REVERSEMODE;
+    }
+    
+    return reverse | (systemMode & SystemMode::SLOWMODE);
+}
+
+void displayNewSystemMode()
+{
+
+
+    if(newSystemMode != systemMode)
+    {
+
+        systemMode = newSystemMode;
+        lcd.setCursor(0,1);
+
+        if(systemMode & SystemMode::BRAKEMODE)
+        {
+            lcd.print(F("Mode: BRAKE     "));
+            return;
+        }
+
+        if(systemMode & SystemMode::REVERSEMODE)
+        {
+            lcd.print(F("Mode: REVERSE   "));
+            return;
+        }
+
+        if(systemMode & SystemMode::SLOWMODE)
+        {
+            lcd.print(F("Mode: SLOW      "));
+            return;
+        }
+        
+
+        lcd.print(F("Mode: NORMAL    "));   
+
+    }
 }
 
 int getTrimIndex(float throttle)
@@ -922,9 +995,20 @@ float getInterpolatedTrim(float throttle)
 // =====================
 // LOOP
 // =====================
-
+float currentOutput = 0.0f;
 void loop() {
 
+   
+    if(!brakeOff())
+    {
+        newSystemMode |= SystemMode::BRAKEMODE;
+    }
+    else
+    {
+        newSystemMode &= ~SystemMode::BRAKEMODE; 
+    }
+
+    displayNewSystemMode();
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
@@ -956,10 +1040,10 @@ void loop() {
     float trim = getInterpolatedTrim(currentOutput);
 
         
-    if(FORCE_OUTPUT > 0.0f)
+    if(FORCE_OUTPUT > 0.0f)     // This is used when calibrating the trim.
     {
         currentOutput = FORCE_OUTPUT;
-        trim = 0.0f;
+        trim = 0.0f;            // Do not apply trim in calibration mode
     }
 
     float left  = currentOutput;
@@ -973,22 +1057,28 @@ void loop() {
     {
         left *= (1.0f + trim); // trim is negative
     }
-
+   
 
     setTrackSpeed(TRACK_ID::LEFT, left);
     setTrackSpeed(TRACK_ID::RIGHT, right);
-    if(printPacer.Pace())
-    {
 
-        Serial.print("Track L: ");
+   
+    if(millis() % 1000 == 0)
+    {
+        Serial.print(F("Throttle :")); Serial.println(currentOutput);
+        Serial.print(F("Track L: "));
         Serial.print(left);
-        Serial.print(" Track R: ");
+        Serial.print(F(" Track R: "));
         Serial.println(right); 
-        Serial.print("Throttle :"); Serial.println(currentOutput);
-        Serial.print("Trim index :"); Serial.println(getTrimIndex(currentOutput));
-        Serial.print("trim: "); Serial.println(trim);
+     
+        
+       
     }
 
+    if(modeSwitch.Pressed())
+    {
+          newSystemMode ^= SystemMode::SLOWMODE;
+    }
 
 
 }
