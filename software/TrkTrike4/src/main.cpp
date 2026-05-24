@@ -149,11 +149,12 @@ void  loadDefaults();
 
 void printTrimValues(const char * text, const float * v)
 {
+ 
     Serial.println(text);
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {   
-        Serial.println(*v);
-        v++;
+      //  Serial.println(*v);
+    //    v++;
     }
 }
 
@@ -254,9 +255,10 @@ ThrottleCal throttleCal;
 // =====================
 // STATE
 // =====================
-float currentOutput = 0.0f;
+
 String inputString = "";
-Switch modeSwitch(MODE);
+//Switch modeSwitch(MODE);
+
 
 // =====================
 // FORWARD DECLARATIONS
@@ -311,9 +313,7 @@ void printConfig(const Config& cfg)
 
     Serial.println();
 
-    Serial.println("Trims:");
-    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
-        Serial.println(cfg.TRIM_VALUES[i]);
+    printTrimValues("Config trim values", TRIM_VALUES);
 
     Serial.print("THROTTLE_MIN_ADC: ");
     Serial.println(cfg.THROTTLE_MIN_ADC);
@@ -638,9 +638,7 @@ void printParams() {
     Serial.print("Throttle Min: "); Serial.println(THROTTLE_MIN_ADC);
     Serial.print("Throttle Max: "); Serial.println(THROTTLE_MAX_ADC);
     Serial.println("Trim Values:");
-    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
-        Serial.println(TRIM_VALUES[i]);
-
+    printTrimValues("Trims: ", TRIM_VALUES);
 }
 
 void setDACStart(TRACK_ID track, int startValue)
@@ -996,9 +994,10 @@ float getInterpolatedTrim(float throttle)
 // =====================
 // LOOP
 // =====================
-
+float currentOutput = 0.0f;
 void loop() {
 
+   
     if(!brakeOff())
     {
         newSystemMode |= SystemMode::BRAKEMODE;
@@ -1062,21 +1061,22 @@ void loop() {
     setTrackSpeed(TRACK_ID::LEFT, left);
     setTrackSpeed(TRACK_ID::RIGHT, right);
 
+   
     if(printPacer.Pace())
     {
-     
+       // Serial.print("Throttle :"); Serial.println(currentOutput);
         Serial.print("Track L: ");
         Serial.print(left);
         Serial.print(" Track R: ");
         Serial.println(right); 
      
-      //  Serial.print("Throttle :"); Serial.println(currentOutput);
-      //         return;
+        
+       
     }
-
-    if(modeSwitch.Pressed())
+    return;
+    //if(modeSwitch.Pressed())
     {
-        newSystemMode ^= SystemMode::SLOWMODE;
+ //       newSystemMode ^= SystemMode::SLOWMODE;
     }
 
 
