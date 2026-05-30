@@ -54,10 +54,10 @@ DriveProfile normalProfile =
 
 DriveProfile slowProfile =
 {
-    0.35f,  // maxOutput
+    0.005f,  // maxOutput
     1.5f,   // softer curve
-    0.03f,  // gentler ramp
-    0.8f    // Ramp down
+    0.005f,  // gentler ramp
+    0.15f    // Ramp down
 };
 
 DriveProfile brakeProfile =
@@ -976,9 +976,10 @@ DriveProfile* SetModes()
     return profile;
 }
 
-void displayNewSystemMode()
-{
 
+// Return true if system mode has changed
+bool displayNewSystemMode()
+{
 
     if(newSystemMode != systemMode)
     {
@@ -989,31 +990,32 @@ void displayNewSystemMode()
         if(systemMode & SystemMode::BRAKEMODE)
         {
             lcd.print(F("BRKE "));
-            return;
+            return true;
         }
 
         if(systemMode & SystemMode::FORCEMODE)
         {
             lcd.print(F("FRCE  "));
-            return;
+            return false;
         }
 
         if(systemMode & SystemMode::REVERSEMODE)
         {
             lcd.print(F("RVRS "));
-            return;
+            return true;
         }
 
         if(systemMode & SystemMode::SLOWMODE)
         {
             lcd.print(F("SLOW "));
-            return;
+            return true;
         }
         
 
         lcd.print(F("NORM "));   
 
     }
+    return false;
 }
 
 int getTrimIndex(float throttle)
@@ -1063,7 +1065,11 @@ float currentOutput = 0.0f;
 void loop() {
 
    
-    displayNewSystemMode();
+    if(displayNewSystemMode())
+    {
+      currentOutput = 0.0f;  
+    }
+    
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
