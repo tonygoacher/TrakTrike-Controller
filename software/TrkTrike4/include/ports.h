@@ -6,5 +6,5 @@
 #define THROTTLE    A0
 #define BRAKE 6
 #define REVERSE 5
-#define MODE 7
+#define MODE 4
 #endif // __PORTS_H__

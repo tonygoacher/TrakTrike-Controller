@@ -27,6 +27,9 @@ Adafruit_MCP4728 mcp;
 #define PARAM_VERSION 5
 #define NUM_TRIM_VALUES 10
 
+#define STATS_UPDATE_MS 1000    // Update stats this many ms
+#define BARGRAPH_UPDATE_MS 100  // Update bargraph this many ms
+
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 SmoothBarGraph barGraph(lcd,6,1,10);
 
@@ -54,7 +57,15 @@ DriveProfile slowProfile =
     0.35f,  // maxOutput
     1.5f,   // softer curve
     0.03f,  // gentler ramp
-    0.8f    // HArd decel
+    0.8f    // Ramp down
+};
+
+DriveProfile brakeProfile =
+{
+    0.0f,  // maxOutput
+    0.0f,   // softer curve
+    0.0f,  // gentler ramp
+    1.0f    // HArd decel
 };
 
 
@@ -74,7 +85,8 @@ const float trimThrottlePoints[NUM_TRIM_VALUES] =
     1.00
 };
 
-// DEfault trim calibration values
+// Default trim calibration values. These are for my EV. 
+// You probably need to do the calibration routine to find your defaults
 const float defaultCalibration[NUM_TRIM_VALUES] = 
 {
     0.17,
@@ -100,20 +112,26 @@ enum SystemMode
     SLOWMODE = 1,
     BRAKEMODE = 2,
     REVERSEMODE = 4,
-    NULLMODE  = 0,
+    FORCEMODE = 8,
+ 
 
     INIT = 0xff
-
 };
 
-uint8_t systemMode = SystemMode::INIT;
-uint8_t newSystemMode = SystemMode::NULLMODE;   // This will be forced into system mode on first loop
+uint8_t systemMode = SystemMode::INIT;      // This is used to force an update from newSystemMode on the first loop
 
+// This will be forced into system mode on first loop.
+// Whenever a new value is loaded into newSystemMode it forces an LCD update
+uint8_t newSystemMode = SystemMode::SLOWMODE;   
+
+DriveProfile* profile = &normalProfile;
 
 typedef struct {
     uint8_t  version;
     uint16_t crc;
 } config_header_t;
+
+
 
 struct Config {
     config_header_t header;
@@ -137,7 +155,7 @@ struct Config {
 
     int THROTTLE_MIN_ADC;
     int THROTTLE_MAX_ADC;
-    uint8_t DAC_DEFAULT_WRITTTEN;
+    uint8_t DAC_DEFAULT_WRITTTEN;       // This is used to track if the default DAC output has been written to the DAC EEPROM
 };
 
 // =====================
@@ -564,11 +582,6 @@ void updateDACDefaults() {
 
 }
 
-// Returns 0 if brake is applied
-int brakeOff()
-{
-    return digitalRead(BRAKE) == HIGH;
-}
 
 // =====================
 // TRACK OUTPUT
@@ -656,8 +669,11 @@ void printParams() {
     Serial.print(F("RIGHT_DAC_START: ")); Serial.println(RIGHT_DAC_START);
     Serial.print(F("Throttle Min: ")); Serial.println(THROTTLE_MIN_ADC);
     Serial.print(F("Throttle Max: ")); Serial.println(THROTTLE_MAX_ADC);
-    Serial.println(F("Trims: "));
-    printTrimValues(TRIM_VALUES);
+    Serial.println(F("Trims: Point    Value"));
+    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
+    {
+        Serial.print(F("      "));Serial.print(trimThrottlePoints[i]); Serial.print("      "); Serial.println(TRIM_VALUES[i]);
+    }
 }
 
 void setDACStart(TRACK_ID track, int startValue)
@@ -915,20 +931,49 @@ void setup() {
     barGraph.begin();
 }
 
-bool IsSlowProfile()
+DriveProfile* SetModes()
 {
-    bool reverse = digitalRead(REVERSE) == LOW;
-    if(reverse)
+    DriveProfile* profile = &normalProfile;
+
+
+    if(digitalRead(BRAKE) == LOW)
     {
-        newSystemMode |= SystemMode::REVERSEMODE;
+        newSystemMode |= SystemMode::BRAKEMODE; 
+        profile = &brakeProfile;
+        return &brakeProfile;         // Highest priority
     }
     else
     {
-    
+        newSystemMode &= ~SystemMode::BRAKEMODE;    
+    }
+
+    if(FORCE_OUTPUT > 0.0)
+    {
+        newSystemMode |= SystemMode::FORCEMODE;
+        return &normalProfile;
+    }
+    else
+    {
+        newSystemMode &=~ SystemMode::FORCEMODE;
+    }
+
+    if(digitalRead(REVERSE) == LOW)
+    {
+        newSystemMode |= SystemMode::REVERSEMODE;
+        return &slowProfile;
+    }
+    else
+    {
         newSystemMode &= ~SystemMode::REVERSEMODE;
     }
+
+    if(systemMode & SystemMode::SLOWMODE)
+    {
+        profile = &slowProfile;
+    }
+
     
-    return reverse | (systemMode & SystemMode::SLOWMODE);
+    return profile;
 }
 
 void displayNewSystemMode()
@@ -944,6 +989,12 @@ void displayNewSystemMode()
         if(systemMode & SystemMode::BRAKEMODE)
         {
             lcd.print(F("BRKE "));
+            return;
+        }
+
+        if(systemMode & SystemMode::FORCEMODE)
+        {
+            lcd.print(F("FRCE  "));
             return;
         }
 
@@ -1012,27 +1063,15 @@ float currentOutput = 0.0f;
 void loop() {
 
    
-    if(!brakeOff())
-    {
-        newSystemMode |= SystemMode::BRAKEMODE;
-    }
-    else
-    {
-        newSystemMode &= ~SystemMode::BRAKEMODE; 
-    }
-
     displayNewSystemMode();
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
    // throttleVal = 0.1f;
 
-    DriveProfile* profile;
+  
 
-    if (IsSlowProfile())
-        profile = &slowProfile;
-    else
-        profile = &normalProfile;
+    DriveProfile* profile = SetModes();
 
     float target = mapThrottle(throttleVal, *profile);
 
@@ -1042,14 +1081,7 @@ void loop() {
 
     currentOutput += (target - currentOutput) * rampRate;
 
-
-    
-    if(!brakeOff())
-    {
-        currentOutput = 0.0f;
-    }
-
-  
+ 
     float trim = getInterpolatedTrim(currentOutput);
 
         
@@ -1062,9 +1094,9 @@ void loop() {
     float left  = currentOutput;
     float right = currentOutput;
 
-    if (trim > 0.0f)
+    if (trim > 0.0f)            // +ve trim affects right trak, -ve trim affects left
     {
-        right *= (1.0f - trim);
+        right *= (1.0f - trim); // Trim value is percentage to reduce throttle value
     }
     else if (trim < 0.0f)
     {
@@ -1076,19 +1108,16 @@ void loop() {
     setTrackSpeed(TRACK_ID::RIGHT, right);
 
    
-    if(millis() % 1000 == 0)
+    if(millis() % STATS_UPDATE_MS == 0)
     {
         Serial.print(F("Throttle :")); Serial.println(currentOutput);
         Serial.print(F("Track L: "));
         Serial.print(left);
         Serial.print(F(" Track R: "));
         Serial.println(right); 
-     
-        
-       
     }
 
-    if(millis() % 100 == 0)
+    if(millis() % BARGRAPH_UPDATE_MS == 0)
     {
         lcd.setCursor(5,1);
         lcd.print(">");
@@ -1099,6 +1128,7 @@ void loop() {
     {
           newSystemMode ^= SystemMode::SLOWMODE;
     }
+
 
 
 }
