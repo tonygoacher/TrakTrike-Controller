@@ -25,8 +25,8 @@ Adafruit_MCP4728 mcp;
 // CONFIG
 // =====================
 #define EEPROM_ADDR 0
-#define PARAM_VERSION 6
-#define NUM_TRIM_VALUES 10
+#define PARAM_VERSION 7
+#define NUM_TRIM_VALUES 11
 
 #define STATS_UPDATE_MS 1000    // Update stats this many ms
 #define BARGRAPH_UPDATE_MS 100  // Update bargraph this many ms
@@ -70,17 +70,21 @@ DriveProfile brakeProfile =
 // The use calibrate lefftrpm rightrpm to set the TRIM_VALUE entry. Index into TRIM_VALUE is calculated automatically
 const float trimThrottlePoints[NUM_TRIM_VALUES] =
 {
-    0.00,
-    0.03,
-    0.05,
-    0.08,
-    0.12,
-    0.18,
-    0.28,
-    0.45,
-    0.70,
-    1.00
+    0.0f,
+    0.1f,
+    0.2f,
+    0.3f,
+    0.4f,
+    0.5f,
+    0.6f,
+    0.7f,
+    0.8f,
+    0.9f,
+    1.0f
 };
+
+// This can be used to override the twist throttle value during trim calibration. BRAKEMODE overrides this.
+float FORCE_OUTPUT  = 0.0f;
 
 // Default trim calibration values. These are for my EV. 
 // You probably need to do the calibration routine to find your defaults
@@ -95,7 +99,8 @@ const float defaultCalibration[NUM_TRIM_VALUES] =
     0.16,
     0.10,
     0.17,
-    0.17
+    0.17,
+    0.17,
 };
 
 enum TRACK_ID
@@ -115,24 +120,24 @@ enum SystemMode
     INIT = 0xff
 };
 
-uint8_t systemMode = SystemMode::INIT;      // This is used to force an update from newSystemMode on the first loop
+// Pending mode state being assembled by SetModes().
+// Changes are committed to systemMode by
+// displayNewSystemMode() after one-shot actions
+// (LCD updates, output resets, etc.) have been performed.
+uint8_t newSystemMode = SystemMode::SLOWMODE; 
 
-// This will be forced into system mode on first loop.
-// Whenever a new value is loaded into newSystemMode it forces an LCD update
-uint8_t newSystemMode = SystemMode::SLOWMODE;   
+// Current active mode state.
+// Used to detect mode transitions and drive the LCD display.
+uint8_t currentSystemMode = SystemMode::INIT;  
 
-DriveProfile* profile = &normalProfile;
 
 typedef struct {
     uint8_t  version;
     uint16_t crc;
 } config_header_t;
 
-
-
-struct Config {
-    config_header_t header;
-
+struct settings_t
+{
     int LEFT_DAC_START;
     int LEFT_DAC_MAX;
     int LEFT_SLOW_DAC_MAX;
@@ -150,30 +155,18 @@ struct Config {
 
     int THROTTLE_MIN_ADC;
     int THROTTLE_MAX_ADC;
-    uint8_t DAC_DEFAULT_WRITTTEN;       // This is used to track if the default DAC output has been written to the DAC EEPROM
+    uint8_t DAC_DEFAULT_WRITTEN;       // This is used to track if the default DAC output has been written to the DAC EEPROM
 };
 
-// =====================
-// RUNTIME PARAMS
-// =====================
-int LEFT_DAC_START;
-int LEFT_DAC_MAX;
-int LEFT_SLOW_DAC_MAX;
-int RIGHT_DAC_START;
-int RIGHT_DAC_MAX;
-int RIGHT_SLOW_DAC_MAX;
+struct Config {
+    config_header_t header;
+    settings_t  settings;
+   
+};
 
-float THROTTLE_DEADBAND;
-float TAKEUP_END;
+Config cfg;
 
 
-float TRIM_VALUES[NUM_TRIM_VALUES];
-
-float FORCE_OUTPUT  = 0.0f;
-
-int THROTTLE_MIN_ADC;
-int THROTTLE_MAX_ADC;
-uint8_t DAC_DEFAULT_WRITTEN;
 
 // Declare forward refs
 void  loadDefaults();
@@ -298,7 +291,7 @@ void applyCalibration();
 void configureThrottle();
 void printParams();
 
-void printConfig(const Config& cfg)
+void printAll(const Config& cfg)
 {
     Serial.println(F("===== CONFIG ====="));
 
@@ -311,43 +304,43 @@ void printConfig(const Config& cfg)
     Serial.println();
 
     Serial.print(F("LEFT DAC_START: "));
-    Serial.println(cfg.LEFT_DAC_START);
+    Serial.println(cfg.settings.LEFT_DAC_START);
     Serial.print(F("RIGHT DAC_START: "));
-    Serial.println(cfg.RIGHT_DAC_START);    
+    Serial.println(cfg.settings.RIGHT_DAC_START);    
 
     Serial.print(F("LEFT_DAC_MAX: "));
-    Serial.println(cfg.LEFT_DAC_MAX);
+    Serial.println(cfg.settings.LEFT_DAC_MAX);
     
     Serial.print(F("LEFT_SLOW_DAC_MAX: "));
-    Serial.println(cfg.LEFT_SLOW_DAC_MAX);
+    Serial.println(cfg.settings.LEFT_SLOW_DAC_MAX);
 
     Serial.print(F("RIGHT DAC_MAX: "));
-    Serial.println(cfg.RIGHT_DAC_MAX);
+    Serial.println(cfg.settings.RIGHT_DAC_MAX);
 
     Serial.print(F("RIGHT_SLOW_DAC_MAX: "));
-    Serial.println(cfg.RIGHT_SLOW_DAC_MAX);
+    Serial.println(cfg.settings.RIGHT_SLOW_DAC_MAX);
 
     Serial.println();
 
     Serial.print(F("THROTTLE_DEADBAND: "));
-    Serial.println(cfg.THROTTLE_DEADBAND, 4);
+    Serial.println(cfg.settings.THROTTLE_DEADBAND, 4);
 
     Serial.print(F("TAKEUP_END: "));
-    Serial.println(cfg.TAKEUP_END, 4);
+    Serial.println(cfg.settings.TAKEUP_END, 4);
 
     Serial.println();
 
     Serial.println();
 
     Serial.println(F("Config trim values"));
-    printTrimValues( TRIM_VALUES);
+    printTrimValues( cfg.settings.TRIM_VALUES);
     
 
     Serial.print(F("THROTTLE_MIN_ADC: "));
-    Serial.println(cfg.THROTTLE_MIN_ADC);
+    Serial.println(cfg.settings.THROTTLE_MIN_ADC);
 
     Serial.print(F("THROTTLE_MAX_ADC: "));
-    Serial.println(cfg.THROTTLE_MAX_ADC);
+    Serial.println(cfg.settings.THROTTLE_MAX_ADC);
 
     Serial.println(F("=================="));
 }
@@ -355,16 +348,15 @@ void printConfig(const Config& cfg)
 // =====================
 // CRC
 // =====================
-uint16_t calculateCRC(const Config &cfg) {
+uint16_t calculateCRC(const settings_t &cfg) {
     const uint8_t *data = (const uint8_t*)&cfg;
 
-    size_t start = sizeof(config_header_t);
-    size_t len   = sizeof(Config) - start;
+    size_t len   = sizeof(settings_t) ;
 
     uint16_t crc = 0;
 
     for (size_t i = 0; i < len; i++) {
-        crc += data[start + i];
+        crc += data[i];
     }
 
     return crc;
@@ -373,60 +365,23 @@ uint16_t calculateCRC(const Config &cfg) {
 // =====================
 // CONFIG APPLY
 // =====================
-void applyConfig(const Config &cfg) {
+void applyConfig(const Config &new_cfg) {
 
-    LEFT_DAC_START = cfg.LEFT_DAC_START;
-    LEFT_DAC_MAX = cfg.LEFT_DAC_MAX;
-    LEFT_SLOW_DAC_MAX = cfg.LEFT_SLOW_DAC_MAX;
-    RIGHT_DAC_START = cfg.RIGHT_DAC_START;
-    RIGHT_DAC_MAX = cfg.RIGHT_DAC_MAX;   
-    RIGHT_SLOW_DAC_MAX = cfg.RIGHT_SLOW_DAC_MAX;
-
-    THROTTLE_DEADBAND = cfg.THROTTLE_DEADBAND;
-    TAKEUP_END = cfg.TAKEUP_END;
-
-    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
-        TRIM_VALUES[i] = cfg.TRIM_VALUES[i];
-
-
-    THROTTLE_MIN_ADC = cfg.THROTTLE_MIN_ADC;
-    THROTTLE_MAX_ADC = cfg.THROTTLE_MAX_ADC;
-
-    DAC_DEFAULT_WRITTEN = cfg.DAC_DEFAULT_WRITTTEN;
-
-    printConfig(cfg);
+    
+    cfg = new_cfg;
+    printAll(cfg);
 }
 
 // =====================
 // CONFIG SAVE/LOAD
 // =====================
 void saveConfig() {
-    Config cfg;
+  
 
     cfg.header.version = PARAM_VERSION;
 
-    cfg.LEFT_DAC_START = LEFT_DAC_START;
-    cfg.LEFT_DAC_MAX = LEFT_DAC_MAX;
-    cfg.LEFT_SLOW_DAC_MAX = LEFT_SLOW_DAC_MAX;
 
-    cfg.RIGHT_DAC_START = RIGHT_DAC_START;
-    cfg.RIGHT_DAC_MAX = RIGHT_DAC_MAX;
-    cfg.RIGHT_SLOW_DAC_MAX = RIGHT_SLOW_DAC_MAX;
-
-    cfg.THROTTLE_DEADBAND = THROTTLE_DEADBAND;
-    cfg.TAKEUP_END = TAKEUP_END;
-
-    for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
-    {
-        cfg.TRIM_VALUES[i] = TRIM_VALUES[i];
-    }
-
-    cfg.THROTTLE_MIN_ADC = THROTTLE_MIN_ADC;
-    cfg.THROTTLE_MAX_ADC = THROTTLE_MAX_ADC;
-
-    cfg.DAC_DEFAULT_WRITTTEN = DAC_DEFAULT_WRITTEN;
-
-    cfg.header.crc = calculateCRC(cfg);
+    cfg.header.crc = calculateCRC(cfg.settings);
 
     EEPROM.put(EEPROM_ADDR, cfg);
 
@@ -434,10 +389,10 @@ void saveConfig() {
 }
 
 bool loadConfig() {
-    Config cfg;
-    EEPROM.get(EEPROM_ADDR, cfg);
+    Config loadedConfig;
+    EEPROM.get(EEPROM_ADDR, loadedConfig);
 
-    if (cfg.header.version != PARAM_VERSION) 
+    if (loadedConfig.header.version != PARAM_VERSION) 
     {
         Serial.println("Config version mismatch. Using defaults");
         loadDefaults();
@@ -445,7 +400,7 @@ bool loadConfig() {
         return false;
     }
 
-    if (calculateCRC(cfg) != cfg.header.crc)
+    if (calculateCRC(loadedConfig.settings) != loadedConfig.header.crc)
     {
       Serial.println("Config load failed CRC. Using defaults");
       loadDefaults();
@@ -453,7 +408,7 @@ bool loadConfig() {
       return false;
     }      
 
-    applyConfig(cfg);
+    applyConfig(loadedConfig);
 
     Serial.println("Loaded config");
     return true;
@@ -461,28 +416,30 @@ bool loadConfig() {
 
 void loadDefaults() {
 
-    LEFT_DAC_START = 1060;
-    RIGHT_DAC_START = 1060;
-    LEFT_DAC_MAX = 3500;
-    RIGHT_DAC_MAX = 3500;
-    LEFT_SLOW_DAC_MAX = 1080;
+     cfg.header.version = PARAM_VERSION;
+     cfg.header.crc = 0;    // This will be set in the save routine.
+     cfg.settings.LEFT_DAC_START = 1060;
+     cfg.settings.RIGHT_DAC_START = 1060;
+     cfg.settings.LEFT_DAC_MAX = 3500;
+     cfg.settings.RIGHT_DAC_MAX = 3500;
+     cfg.settings.LEFT_SLOW_DAC_MAX = 1080;
     
-    RIGHT_SLOW_DAC_MAX = 1080;
+     cfg.settings.RIGHT_SLOW_DAC_MAX = 1080;
 
-    THROTTLE_DEADBAND = 0.05f;
-    TAKEUP_END = 0.20f;
+     cfg.settings.THROTTLE_DEADBAND = 0.05f;
+     cfg.settings.TAKEUP_END = 0.20f;
 
 
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {
-        TRIM_VALUES[i] = defaultCalibration[i];
+         cfg.settings.TRIM_VALUES[i] = defaultCalibration[i];
     }
 
 
-    THROTTLE_MIN_ADC = 177;
-    THROTTLE_MAX_ADC = 808;
+     cfg.settings.THROTTLE_MIN_ADC = 177;
+     cfg.settings.THROTTLE_MAX_ADC = 808;
 
-    DAC_DEFAULT_WRITTEN = 0;
+     cfg.settings.DAC_DEFAULT_WRITTEN = 0;
 
     Serial.println("Loaded defaults");
     printParams();
@@ -494,17 +451,17 @@ void loadDefaults() {
 // =====================
 void configureThrottle() {
 
-    TwistThrottle::Config cfg;
+    TwistThrottle::Config throttleConfig;
 
-    cfg.minADC = THROTTLE_MIN_ADC;
-    cfg.maxADC = THROTTLE_MAX_ADC;
+    throttleConfig.minADC =  cfg.settings.THROTTLE_MIN_ADC;
+    throttleConfig.maxADC =  cfg.settings.THROTTLE_MAX_ADC;
 
-    cfg.deadband = 8;
-    cfg.filterAlpha = 0.1f;
-    cfg.maxRate = 0.0f;
+    throttleConfig.deadband = 8;
+    throttleConfig.filterAlpha = 0.1f;
+    throttleConfig.maxRate = 0.0f;
 
 
-    throttle.begin(cfg);
+    throttle.begin(throttleConfig);
 }
 
 // =====================
@@ -522,19 +479,84 @@ void captureMax() {
     Serial.print(F("Max captured: ")); Serial.println(throttleCal.maxADC);
 }
 
-void applyCalibration() {
+/**
+ * Apply the most recently captured throttle calibration values.
+ *
+ * The calibration process records the minimum and maximum ADC readings
+ * observed while the throttle is moved through its full travel. This
+ * function validates the captured range, applies a small safety margin,
+ * and updates the stored throttle calibration limits.
+ *
+ * A margin of 5 ADC counts is added to the measured minimum and
+ * subtracted from the measured maximum. This prevents normal operation
+ * from occurring exactly at the calibration boundaries and provides a
+ * small tolerance for ADC noise and component drift.
+ *
+ * The adjusted values are constrained to the valid ADC range
+ * (0-1023) and then checked to ensure a valid throttle span remains.
+ *
+ * If the resulting range is invalid, the calibration is rejected and
+ * detailed diagnostic information is printed to aid troubleshooting.
+ *
+ * On success, configureThrottle() is called to rebuild any derived
+ * parameters used by the throttle processing code.
+ */
+void applyCalibration()
+{
+    constexpr int MaxADCValue = 1023;  // This may change depending on yuor hardware
+    constexpr int MinADCValue = 0;
+    constexpr int CALIBRATION_MARGIN_ADC = 5;   // Gives us some leeway over a noise ADC reading
 
-    if (throttleCal.maxADC <= throttleCal.minADC) {
-        Serial.print(F("Invalid calibration. Min:"));Serial.println(throttleCal.minADC); Serial.print (F(" Max:")); Serial.println(throttleCal.maxADC);
+    // Validate measured calibration range
+    if (throttleCal.maxADC <= throttleCal.minADC)
+    {
+        Serial.println(F("Invalid calibration range"));
+
+        Serial.print(F("Measured Min: "));
+        Serial.println(throttleCal.minADC);
+
+        Serial.print(F("Measured Max: "));
+        Serial.println(throttleCal.maxADC);
+
         return;
     }
 
-    THROTTLE_MIN_ADC = throttleCal.minADC + 5;
-    THROTTLE_MAX_ADC = throttleCal.maxADC - 5;
+    // Apply calibration margin and constrain to ADC limits
+    int minADC = constrain(throttleCal.minADC + CALIBRATION_MARGIN_ADC, MinADCValue, MaxADCValue);
+    int maxADC = constrain(throttleCal.maxADC - CALIBRATION_MARGIN_ADC, MinADCValue, MaxADCValue);
+
+    // Ensure a valid range remains after margins are applied
+    if (maxADC <= minADC)
+    {
+        Serial.println(F("Calibration range too small after margins"));
+
+        Serial.print(F("Measured Min: "));
+        Serial.println(throttleCal.minADC);
+
+        Serial.print(F("Measured Max: "));
+        Serial.println(throttleCal.maxADC);
+
+        Serial.print(F("Adjusted Min: "));
+        Serial.println(minADC);
+
+        Serial.print(F("Adjusted Max: "));
+        Serial.println(maxADC);
+
+        return;
+    }
+
+    cfg.settings.THROTTLE_MIN_ADC = minADC;
+    cfg.settings.THROTTLE_MAX_ADC = maxADC;
 
     configureThrottle();
 
     Serial.println(F("Calibration applied"));
+
+    Serial.print(F("Throttle Min ADC: "));
+    Serial.println(cfg.settings.THROTTLE_MIN_ADC);
+
+    Serial.print(F("Throttle Max ADC: "));
+    Serial.println(cfg.settings.THROTTLE_MAX_ADC);
 }
 
 // =====================
@@ -553,37 +575,42 @@ void updateDACDefaults() {
     mcp.setChannelValue(MCP4728_CHANNEL_B, 0);// RIGHT_DAC_START
   
     Serial.print(F("Default LEFT_DAC_START "));
-    Serial.println(LEFT_DAC_START);
+    Serial.println(cfg.settings.LEFT_DAC_START);
 
     Serial.print(F("Default RIGHT_DAC_START "));
-    Serial.println(RIGHT_DAC_START);
+    Serial.println(cfg.settings.RIGHT_DAC_START);
 
     mcp.setChannelValue(MCP4728_CHANNEL_C, 0);
     mcp.setChannelValue(MCP4728_CHANNEL_D, 0);
 
     mcp.saveToEEPROM();
 
-    lastStoredDACStartLeft = LEFT_DAC_START;
-    lastStoredDACStartRight = RIGHT_DAC_START;
+    lastStoredDACStartLeft = cfg.settings.LEFT_DAC_START;
+    lastStoredDACStartRight = cfg.settings.RIGHT_DAC_START;
 
 }
 
+
+// The throttle value is always 0.0-1.0. This function returns the maximum DAC value 
+// that is to be scaled afgainst the throttle value to get the actual speed. SLOWMODE returns a
+// smaller MAXDAC value so we can use the entire mechanical range of the twist throttle but 
+// limit the maximum speed that this will result in.
 int getMaxDACValue(int trackID)
 {
-    
-    if(systemMode & SystemMode::SLOWMODE || systemMode & SystemMode::REVERSEMODE)
+    // Force mode overrides all as it's essential we use the top end DAC output for calibration
+    if(((currentSystemMode & SystemMode::SLOWMODE) || (currentSystemMode & SystemMode::REVERSEMODE)) && !(currentSystemMode & SystemMode::FORCEMODE))
     {
         if(trackID == TRACK_ID::LEFT)
         {
-            return LEFT_SLOW_DAC_MAX;
+            return cfg.settings.LEFT_SLOW_DAC_MAX;
         }
         else
         {
-            return RIGHT_SLOW_DAC_MAX;
+            return cfg.settings.RIGHT_SLOW_DAC_MAX;
         }
     }
     
-    return trackID == TRACK_ID::LEFT ? LEFT_DAC_MAX : RIGHT_DAC_MAX;
+    return trackID == TRACK_ID::LEFT ? cfg.settings.LEFT_DAC_MAX : cfg.settings.RIGHT_DAC_MAX;
 
 }
 
@@ -591,17 +618,17 @@ int getMaxDACValue(int trackID)
 // =====================
 // TRACK OUTPUT
 // =====================
-Pacer trackPacer(true,1000);
+Pacer trackPacer(true,STATS_UPDATE_MS);
 void setTrackSpeed(int trackID, float speed) {
 
     speed = constrain(speed, 0.0f, 1.0f);
 
 
-    int vmax = getMaxDACValue(trackID);
+    int vmax = getMaxDACValue(trackID); // Ge the max value to scale againt the throttle
 
-    int vstart = (trackID == TRACK_ID::LEFT)
-             ? LEFT_DAC_START
-             : RIGHT_DAC_START;
+    int vstart = (trackID == TRACK_ID::LEFT)    // Any values lower than vstart result in the motor being off, so start at this value
+             ? cfg.settings.LEFT_DAC_START
+             : cfg.settings.RIGHT_DAC_START;
 
     int dac = vstart + speed * (vmax - vstart);
     dac = constrain(dac, 0, vmax);
@@ -628,20 +655,52 @@ void setTrackSpeed(int trackID, float speed) {
 
 // =====================
 // THROTTLE MAP
-// =====================
+/**
+ * Convert a normalised throttle input (0.0-1.0) into a normalised
+ * speed demand (0.0-1.0).
+ *
+ * The mapping consists of three regions:
+ *
+ *  1) Deadband
+ *     Inputs below THROTTLE_DEADBAND return zero output. This removes
+ *     sensor noise and prevents unintended vehicle movement.
+ *
+ *  2) Take-up region
+ *     Between THROTTLE_DEADBAND and TAKEUP_END a quadratic curve is
+ *     applied, producing an output range of 0.0-0.1. This provides
+ *     fine low-speed control and reduces the tendency for the vehicle
+ *     to "jump" as movement begins.
+ *
+ *  3) Main throttle region
+ *     Above TAKEUP_END the remaining throttle travel is scaled to
+ *     produce an output range of 0.1-1.0. The DriveProfile
+ *     curveExponent controls throttle feel:
+ *
+ *         1.0 = linear
+ *        >1.0 = softer response
+ *        <1.0 = more aggressive response
+ *
+ * A small full-throttle override ensures 100% output can always be
+ * reached even if the calibrated throttle never quite reaches 1.0.
+ *
+ * @param t        Normalised throttle input (0.0-1.0)
+ * @param profile  Active drive profile defining throttle shaping
+ *
+ * @return Normalised speed demand (0.0-1.0)
+ */
 float mapThrottle(float t, const DriveProfile& profile)
 {
 
-    if (t < THROTTLE_DEADBAND)
+    if (t < cfg.settings.THROTTLE_DEADBAND)
         return 0.0f;
 
-    if (t < TAKEUP_END) {
-        float x = (t - THROTTLE_DEADBAND) / (TAKEUP_END - THROTTLE_DEADBAND);
+    if (t < cfg.settings.TAKEUP_END) {
+        float x = (t - cfg.settings.THROTTLE_DEADBAND) / (cfg.settings.TAKEUP_END - cfg.settings.THROTTLE_DEADBAND);
         x = x * x;
         return x * 0.1f;
     }
 
-    float x = (t - TAKEUP_END) / (1.0f - TAKEUP_END);
+    float x = (t - cfg.settings.TAKEUP_END) / (1.0f - cfg.settings.TAKEUP_END);
 
     x = pow(x, profile.curveExponent);
 
@@ -658,7 +717,7 @@ float mapThrottle(float t, const DriveProfile& profile)
 
 
 // =====================
-// SERIAL
+// We use the serial port during calibration.
 // =====================
 void handleSerial() {
     while (Serial.available()) {
@@ -678,27 +737,101 @@ void handleSerial() {
 
 void printParams() {
     Serial.println("--- Params ---");
-    Serial.print(F("LEFT_DAC_START: ")); Serial.println(LEFT_DAC_START);
-    Serial.print(F("RIGHT_DAC_START: ")); Serial.println(RIGHT_DAC_START);
-    Serial.print(F("Throttle Min: ")); Serial.println(THROTTLE_MIN_ADC);
-    Serial.print(F("Throttle Max: ")); Serial.println(THROTTLE_MAX_ADC);
+    Serial.print(F("LEFT_DAC_START: ")); Serial.println(cfg.settings.LEFT_DAC_START);
+    Serial.print(F("RIGHT_DAC_START: ")); Serial.println(cfg.settings.RIGHT_DAC_START);
+    Serial.print(F("Throttle Min: ")); Serial.println(cfg.settings.THROTTLE_MIN_ADC);
+    Serial.print(F("Throttle Max: ")); Serial.println(cfg.settings.THROTTLE_MAX_ADC);
     Serial.println(F("Trims: Point    Value"));
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {
-        Serial.print(F("      "));Serial.print(trimThrottlePoints[i]); Serial.print("      "); Serial.println(TRIM_VALUES[i]);
+        Serial.print(F("      "));Serial.print(trimThrottlePoints[i]); Serial.print("      "); Serial.println(cfg.settings.TRIM_VALUES[i]);
     }
 }
 
+void setDACMax(TRACK_ID track, int value)
+{
+    constexpr int   MinDACValue = 0;
+    constexpr int   MaxDACValue = 4095;
+    constexpr float DAC_VREF    = 4.7f;
+    value = constrain(value, MinDACValue, MaxDACValue);
+
+    if(track == LEFT)
+    {
+        cfg.settings.LEFT_DAC_MAX = value;
+        Serial.print(F("LEFT DAC MAX"));
+    }
+    else
+    {
+        cfg.settings.RIGHT_DAC_MAX = value;
+        Serial.print(F("RIGHT DAC MAX"));
+    }
+
+    float volts = DAC_VREF * value / MaxDACValue;;
+
+    Serial.print(F(": "));
+    Serial.print(value);
+
+    Serial.print(F("  Voltage: "));
+    Serial.print(volts, 2);
+    Serial.println(F("V"));
+}
+
+void setSlowDACMax(TRACK_ID track, int value)
+{
+    constexpr int   MinDACValue = 0;
+    constexpr int   MaxDACValue = 4095;
+    constexpr float DAC_VREF    = 4.7f;
+
+    value = constrain(value, MinDACValue, MaxDACValue);
+
+    if(track == LEFT)
+    {
+        cfg.settings.LEFT_SLOW_DAC_MAX = value;
+        Serial.print(F("LEFT SLOW DAC MAX"));
+    }
+    else
+    {
+        cfg.settings.RIGHT_SLOW_DAC_MAX = value;
+        Serial.print(F("RIGHT SLOW DAC MAX"));
+    }
+
+    float volts = DAC_VREF * value / MaxDACValue;
+
+    Serial.print(F(": "));
+    Serial.print(value);
+
+    Serial.print(F("  Voltage: "));
+    Serial.print(volts, 2);
+    Serial.println(F("V"));
+}
+
+
+/**
+ * Set the minimum DAC value for the specified track.
+ *
+ * DAC_START defines the output value applied when the commanded track
+ * speed is zero. This is used to compensate for motor controller deadband,
+ * ensuring the tracks begin moving as soon as a non-zero speed is requested.
+ * NB It is not the absolute minimum value as a value of 0 is forced for 2s during start up
+ *
+ * The function updates the configuration value and reports the equivalent
+ * output voltage for convenience when tuning the controller. The calculated
+ * voltage assumes a 4.7V MCP4728 reference supply and a 12-bit DAC range
+ * of 0-4095 counts.
+ *
+ * @param track       Track to update (LEFT or RIGHT)
+ * @param startValue  DAC value in the range 0-4095
+ */
 void setDACStart(TRACK_ID track, int startValue)
 {
     if(track == LEFT)
     {
-        LEFT_DAC_START = startValue;  
+        cfg.settings.LEFT_DAC_START = startValue;  
         Serial.print(F("LEFT DAC START"));
     }
     else
     {
-        RIGHT_DAC_START = startValue;
+        cfg.settings.RIGHT_DAC_START = startValue;
         Serial.print(F("RIGHT DAC START"));
     }
 
@@ -714,7 +847,31 @@ void setDACStart(TRACK_ID track, int startValue)
 
 
 
-
+/**
+ * Calculate and store a trim correction for the current throttle position.
+ *
+ * The TrakTrike uses a table of trim values indexed by throttle position to
+ * compensate for differences between the left and right drive systems.
+ *
+ * During calibration the vehicle is driven at a known throttle setting (Entries in trimThrottlePoints) and
+ * the actual left and right track RPMs are measured with a tachometer. The nearest throttle
+ * calibration point is located and a signed trim value is calculated from
+ * the RPM difference:
+ *
+ *   Positive trim -> reduce right track speed
+ *   Negative trim -> reduce left track speed
+ *
+ * To prevent accidental calibration at arbitrary throttle positions, the
+ * current throttle must be within ±0.02 of a predefined trim table point.
+ *
+ * The resulting trim value is stored in cfg.settings.TRIM_VALUES[] and is
+ * later interpolated by getInterpolatedTrim() to provide smooth correction
+ * across the entire throttle range.
+ *
+ * @param throttle  Current commanded throttle (0.0-1.0)
+ * @param leftRPM   Measured left track RPM
+ * @param rightRPM  Measured right track RPM
+ */
 void calibrate(float throttle,
                float leftRPM,
                float rightRPM)
@@ -798,7 +955,7 @@ void calibrate(float throttle,
     }
 
     // Store trim
-    TRIM_VALUES[bestIndex] = trim;
+    cfg.settings.TRIM_VALUES[bestIndex] = trim;
 
     // Report result
     Serial.println();
@@ -815,6 +972,8 @@ void calibrate(float throttle,
     Serial.println();
 }
 
+
+// Act upon a serial command  for calibration
 void processCommand(String cmd)
  {
   
@@ -830,6 +989,8 @@ void processCommand(String cmd)
     if (cmd == F("cal apply")) { applyCalibration(); saveConfig(); return; }
 
     if (cmd == F("show")) { printParams(); return; }
+
+    if (cmd == F("showall")) { printAll(cfg); return; }
 
     if(cmd.startsWith(F("force ")))
     {
@@ -859,7 +1020,7 @@ void processCommand(String cmd)
             Serial.println("Trim throttle points:");
             printTrimValues(trimThrottlePoints);
             Serial.println(F("Current Trim Values"));
-            printTrimValues( TRIM_VALUES);
+            printTrimValues( cfg.settings.TRIM_VALUES);
 
             return;
         }
@@ -883,6 +1044,30 @@ void processCommand(String cmd)
         return;
     }
 
+    if (cmd.startsWith("dacmaxl "))
+    {
+        setDACMax(LEFT, cmd.substring(8).toInt());
+        return;
+    }
+
+    if (cmd.startsWith("dacmaxl "))
+    {
+        setDACMax(RIGHT, cmd.substring(8).toInt());
+        return;
+    }
+
+    if (cmd.startsWith("slowmaxl "))
+    {
+        setSlowDACMax(LEFT, cmd.substring(9).toInt());
+        return;
+    }
+
+    if (cmd.startsWith("slowmaxr "))
+    {
+        setSlowDACMax(RIGHT, cmd.substring(9).toInt());
+        return;
+    }
+
     Serial.print(F("UNKNOWN COMMAND ")); Serial.println(cmd.c_str());
 }
 
@@ -896,7 +1081,7 @@ void setup() {
   
     Serial.println(F("Running"));
 
-     lcd.init();
+    lcd.init();
     lcd.backlight();
     lcd.print(F(" TrakTrike v4.0 "));
     lcd.setCursor(0,1);
@@ -912,6 +1097,9 @@ void setup() {
         while (1);
     }
 
+    // It was found that ANY voltage output on the throttle input to the motor controller
+    // at power up can cause the controller to ignore any further throttle values.
+    // We force the throttle here for 3s to allow it to settle before we continue
     mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
     mcp.setChannelValue(MCP4728_CHANNEL_B, 0);
 
@@ -929,10 +1117,10 @@ void setup() {
 
     printParams();
 
-    if(DAC_DEFAULT_WRITTEN == 0)
+    if(cfg.settings.DAC_DEFAULT_WRITTEN == 0)
     {
          updateDACDefaults();
-         DAC_DEFAULT_WRITTEN = 0xff;
+         cfg.settings.DAC_DEFAULT_WRITTEN = 0xff;
          saveConfig();
     }
     else
@@ -944,6 +1132,34 @@ void setup() {
     barGraph.begin();
 }
 
+
+/**
+ * Determine the active drive profile and update the pending system mode.
+ *
+ * This function evaluates all mode inputs in priority order and returns
+ * the DriveProfile that should be used for throttle mapping and ramping.
+ *
+ * The selected mode is recorded in newSystemMode, which is later compared
+ * against currentSystemMode by displayNewSystemMode(). This allows mode changes
+ * to trigger one-shot actions such as LCD updates and output resets.
+ *
+ * Mode priority is:
+ *
+ *   BRAKE    - Highest priority. Immediately applies brakeProfile and overrides
+ *              all other modes.
+ *
+ *   FORCE    - Used during trim calibration. Bypasses normal operation
+ *              and forces use of the normal profile.
+ *
+ *   REVERSE  - Applies slowProfile to provide reduced-speed reversing.
+ *
+ *   SLOW     - Operator-selected manoeuvring mode. Uses slowProfile when
+ *              no higher-priority modes are active.
+ *
+ * The early returns are intentional and implement the mode priority system.
+ *
+ * @return Pointer to the DriveProfile that should be used for this loop.
+ */
 DriveProfile* SetModes()
 {
     DriveProfile* profile = &normalProfile;
@@ -980,7 +1196,7 @@ DriveProfile* SetModes()
         newSystemMode &= ~SystemMode::REVERSEMODE;
     }
 
-    if(systemMode & SystemMode::SLOWMODE)
+    if(currentSystemMode & SystemMode::SLOWMODE)
     {
         profile = &slowProfile;
     }
@@ -990,35 +1206,56 @@ DriveProfile* SetModes()
 }
 
 
-// Return true if system mode has changed
+/**
+ * Process pending mode changes and update the LCD display.
+ *
+ * newSystemMode contains the mode state assembled by SetModes().
+ * This function compares it against currentSystemMode and performs
+ * any one-shot actions required when the mode changes.
+ *
+ * When a change is detected:
+ *   - currentSystemMode is updated
+ *   - the mode indicator on the LCD is refreshed
+ *   - a boolean result indicates whether the drive output should
+ *     be reset to zero
+ *
+ * Return value:
+ *   true  - drive output should be reset (BRAKE, REVERSE, SLOW)
+ *   false - no output reset required (FORCE, NORMAL, or no change)
+ *
+ * This mechanism prevents repeated LCD updates and provides a single
+ * point for handling mode transition events.
+ *
+ * @return true if the caller should reset currentOutput, otherwise false.
+ */
 bool displayNewSystemMode()
 {
 
-    if(newSystemMode != systemMode)
+    if(newSystemMode != currentSystemMode)
     {
 
-        systemMode = newSystemMode;
+        currentSystemMode = newSystemMode;
         lcd.setCursor(0,1);
 
-        if(systemMode & SystemMode::BRAKEMODE)
+        if(currentSystemMode & SystemMode::BRAKEMODE)
         {
             lcd.print(F("BRKE "));
             return true;
         }
 
-        if(systemMode & SystemMode::FORCEMODE)
+        if(currentSystemMode & SystemMode::FORCEMODE)
         {
             lcd.print(F("FRCE  "));
             return false;
         }
 
-        if(systemMode & SystemMode::REVERSEMODE)
+        if(currentSystemMode & SystemMode::REVERSEMODE)
         {
             lcd.print(F("RVRS "));
             return true;
         }
 
-        if(systemMode & SystemMode::SLOWMODE)
+        if(currentSystemMode & SystemMode::SLOWMODE)
         {
             lcd.print(F("SLOW "));
             Serial.println(F("SLOW MODE"));
@@ -1032,6 +1269,37 @@ bool displayNewSystemMode()
     return false;
 }
 
+
+/**
+ * Trim table support functions.
+ *
+ * Track trim is stored as a set of calibration points distributed across
+ * the throttle range. Each entry in TRIM_VALUES[] contains the correction
+ * required at the corresponding throttle point in trimThrottlePoints[].
+ *
+ * getTrimIndex()
+ *   Converts a normalised throttle value (0.0-1.0) into the lower trim
+ *   table index. This is primarily used during calibration when storing
+ *   a trim value at the nearest throttle calibration point.
+ *
+ * getInterpolatedTrim()
+ *   Returns the trim correction for an arbitrary throttle value by
+ *   linearly interpolating between adjacent entries in the trim table.
+ *   This produces a smooth trim curve and avoids abrupt steering changes
+ *   when transitioning between calibration points.
+ *
+ * Example:
+ *
+ *   Throttle Points:  0.0   0.1   0.2   0.3
+ *   Trim Values:     0.00  0.01  0.03  0.04
+ *
+ *   throttle = 0.15
+ *
+ *   Interpolated trim = 0.02
+ *
+ * The trim value is later applied by the drive controller to compensate
+ * for differences between the left and right drive systems.
+ */
 int getTrimIndex(float throttle)
 {
     float scaled = throttle * (NUM_TRIM_VALUES - 1);
@@ -1042,16 +1310,14 @@ int getTrimIndex(float throttle)
 }
 
 
-
-
 float getInterpolatedTrim(float throttle)
 {
     // Clamp input
     if (throttle < trimThrottlePoints[0])
-        return TRIM_VALUES[0];
+        return cfg.settings.TRIM_VALUES[0];
 
     if (throttle >= trimThrottlePoints[NUM_TRIM_VALUES - 1])
-        return TRIM_VALUES[NUM_TRIM_VALUES - 1];
+        return cfg.settings.TRIM_VALUES[NUM_TRIM_VALUES - 1];
 
     // Find containing segment
     for (int i = 0; i < (NUM_TRIM_VALUES - 1); i++)
@@ -1063,8 +1329,8 @@ float getInterpolatedTrim(float throttle)
         {
             float frac = (throttle - t0) / (t1 - t0);
 
-            return TRIM_VALUES[i] +
-                   (TRIM_VALUES[i + 1] - TRIM_VALUES[i]) * frac;
+            return cfg.settings.TRIM_VALUES[i] +
+                   (cfg.settings.TRIM_VALUES[i + 1] - cfg.settings.TRIM_VALUES[i]) * frac;
         }
     }
 
@@ -1072,23 +1338,50 @@ float getInterpolatedTrim(float throttle)
     return 0.0f;
 }
 
+
+void showMode()
+{
+    Serial.print(F("MODE: "));
+    if(currentSystemMode & SystemMode::SLOWMODE)
+    {
+        Serial.print(F(" SLOW"));
+    }
+    else
+    {
+        Serial.print(F(" NORMAL"));
+    
+    }
+       
+    if(currentSystemMode & SystemMode::BRAKEMODE)
+    {
+        Serial.print(F(" BRAKE"));
+    }
+
+    if(currentSystemMode & SystemMode::FORCEMODE)
+    {
+        Serial.print(F(" FORCE"));
+    }
+
+    if(currentSystemMode & SystemMode::REVERSEMODE)
+    {
+        Serial.print(F(" REVERSE"));
+    }
+    Serial.println();
+
+}
+
 // =====================
 // LOOP
 // =====================
 float currentOutput = 0.0f;
-Pacer lcdPacer(true,100);
-Pacer serialPacer(true,1000);
+Pacer lcdPacer(true,BARGRAPH_UPDATE_MS);
+Pacer serialPacer(true,STATS_UPDATE_MS);
 void loop() {
-
-   
 
     
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
-   // throttleVal = 0.1f;
-
-  
 
     DriveProfile* profile = SetModes();
 
@@ -1139,6 +1432,7 @@ void loop() {
         Serial.print(left);
         Serial.print(F(" Track R: "));
         Serial.println(right); 
+        showMode();
     }
 
     if(lcdPacer.Pace())
@@ -1151,7 +1445,6 @@ void loop() {
     if(modeSwitch.Pressed())
     {
           newSystemMode ^= SystemMode::SLOWMODE;
-          Serial.print("New mode is "); Serial.println(newSystemMode & SystemMode::SLOWMODE ? "SLOW" : "NORM");
     }
 
 }
