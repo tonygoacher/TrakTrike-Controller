@@ -12,6 +12,7 @@
 
 #include "Switch.h"
 #include "SmoothBarGraph.h"
+#include "Pacer.h"
 
 
 
@@ -24,7 +25,7 @@ Adafruit_MCP4728 mcp;
 // CONFIG
 // =====================
 #define EEPROM_ADDR 0
-#define PARAM_VERSION 5
+#define PARAM_VERSION 6
 #define NUM_TRIM_VALUES 10
 
 #define STATS_UPDATE_MS 1000    // Update stats this many ms
@@ -35,7 +36,6 @@ SmoothBarGraph barGraph(lcd,6,1,10);
 
 struct DriveProfile
 {
-    float maxOutput;
     float curveExponent;
     float rampUp;
     float rampDown;
@@ -46,7 +46,6 @@ struct DriveProfile
 
 DriveProfile normalProfile =
 {
-    1.0f,   // maxOutput
     1.3f,   // curve
     0.05f,  // ramp up
     0.8f    // ramp down
@@ -54,7 +53,6 @@ DriveProfile normalProfile =
 
 DriveProfile slowProfile =
 {
-    0.005f,  // maxOutput
     1.5f,   // softer curve
     0.005f,  // gentler ramp
     0.15f    // Ramp down
@@ -62,7 +60,6 @@ DriveProfile slowProfile =
 
 DriveProfile brakeProfile =
 {
-    0.0f,  // maxOutput
     0.0f,   // softer curve
     0.0f,  // gentler ramp
     1.0f    // HArd decel
@@ -136,19 +133,17 @@ typedef struct {
 struct Config {
     config_header_t header;
 
-    int DAC_MIN;
     int LEFT_DAC_START;
     int LEFT_DAC_MAX;
+    int LEFT_SLOW_DAC_MAX;
     int RIGHT_DAC_START;
     int RIGHT_DAC_MAX;
+    int RIGHT_SLOW_DAC_MAX;
     int LEFT_DEFAULT;
     int RIGHT_DEFAULT;
 
     float THROTTLE_DEADBAND;
     float TAKEUP_END;
-
-    float RAMP_UP_RATE;
-    float RAMP_DOWN_RATE;
 
     float TRIM_VALUES[NUM_TRIM_VALUES];
 
@@ -161,17 +156,15 @@ struct Config {
 // =====================
 // RUNTIME PARAMS
 // =====================
-int DAC_MIN;
 int LEFT_DAC_START;
 int LEFT_DAC_MAX;
+int LEFT_SLOW_DAC_MAX;
 int RIGHT_DAC_START;
 int RIGHT_DAC_MAX;
+int RIGHT_SLOW_DAC_MAX;
 
 float THROTTLE_DEADBAND;
 float TAKEUP_END;
-
-float RAMP_UP_RATE;
-float RAMP_DOWN_RATE;
 
 
 float TRIM_VALUES[NUM_TRIM_VALUES];
@@ -317,9 +310,6 @@ void printConfig(const Config& cfg)
 
     Serial.println();
 
-    Serial.print(F("DAC_MIN: "));
-    Serial.println(cfg.DAC_MIN);
-
     Serial.print(F("LEFT DAC_START: "));
     Serial.println(cfg.LEFT_DAC_START);
     Serial.print(F("RIGHT DAC_START: "));
@@ -327,9 +317,15 @@ void printConfig(const Config& cfg)
 
     Serial.print(F("LEFT_DAC_MAX: "));
     Serial.println(cfg.LEFT_DAC_MAX);
+    
+    Serial.print(F("LEFT_SLOW_DAC_MAX: "));
+    Serial.println(cfg.LEFT_SLOW_DAC_MAX);
 
     Serial.print(F("RIGHT DAC_MAX: "));
     Serial.println(cfg.RIGHT_DAC_MAX);
+
+    Serial.print(F("RIGHT_SLOW_DAC_MAX: "));
+    Serial.println(cfg.RIGHT_SLOW_DAC_MAX);
 
     Serial.println();
 
@@ -340,12 +336,6 @@ void printConfig(const Config& cfg)
     Serial.println(cfg.TAKEUP_END, 4);
 
     Serial.println();
-
-    Serial.print(F("RAMP_UP_RATE: "));
-    Serial.println(cfg.RAMP_UP_RATE, 4);
-
-    Serial.print(F("RAMP_DOWN_RATE: "));
-    Serial.println(cfg.RAMP_DOWN_RATE, 4);
 
     Serial.println();
 
@@ -368,7 +358,7 @@ void printConfig(const Config& cfg)
 uint16_t calculateCRC(const Config &cfg) {
     const uint8_t *data = (const uint8_t*)&cfg;
 
-    size_t start = offsetof(Config, DAC_MIN);
+    size_t start = sizeof(config_header_t);
     size_t len   = sizeof(Config) - start;
 
     uint16_t crc = 0;
@@ -385,17 +375,15 @@ uint16_t calculateCRC(const Config &cfg) {
 // =====================
 void applyConfig(const Config &cfg) {
 
-    DAC_MIN = cfg.DAC_MIN;
     LEFT_DAC_START = cfg.LEFT_DAC_START;
     LEFT_DAC_MAX = cfg.LEFT_DAC_MAX;
+    LEFT_SLOW_DAC_MAX = cfg.LEFT_SLOW_DAC_MAX;
     RIGHT_DAC_START = cfg.RIGHT_DAC_START;
-    RIGHT_DAC_MAX = cfg.RIGHT_DAC_MAX;    
+    RIGHT_DAC_MAX = cfg.RIGHT_DAC_MAX;   
+    RIGHT_SLOW_DAC_MAX = cfg.RIGHT_SLOW_DAC_MAX;
 
     THROTTLE_DEADBAND = cfg.THROTTLE_DEADBAND;
     TAKEUP_END = cfg.TAKEUP_END;
-
-    RAMP_UP_RATE = cfg.RAMP_UP_RATE;
-    RAMP_DOWN_RATE = cfg.RAMP_DOWN_RATE;
 
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
         TRIM_VALUES[i] = cfg.TRIM_VALUES[i];
@@ -417,18 +405,16 @@ void saveConfig() {
 
     cfg.header.version = PARAM_VERSION;
 
-    cfg.DAC_MIN = DAC_MIN;
     cfg.LEFT_DAC_START = LEFT_DAC_START;
     cfg.LEFT_DAC_MAX = LEFT_DAC_MAX;
+    cfg.LEFT_SLOW_DAC_MAX = LEFT_SLOW_DAC_MAX;
 
     cfg.RIGHT_DAC_START = RIGHT_DAC_START;
     cfg.RIGHT_DAC_MAX = RIGHT_DAC_MAX;
+    cfg.RIGHT_SLOW_DAC_MAX = RIGHT_SLOW_DAC_MAX;
 
     cfg.THROTTLE_DEADBAND = THROTTLE_DEADBAND;
     cfg.TAKEUP_END = TAKEUP_END;
-
-    cfg.RAMP_UP_RATE = RAMP_UP_RATE;
-    cfg.RAMP_DOWN_RATE = RAMP_DOWN_RATE;
 
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {
@@ -475,17 +461,17 @@ bool loadConfig() {
 
 void loadDefaults() {
 
-    DAC_MIN = 800;
     LEFT_DAC_START = 1060;
     RIGHT_DAC_START = 1060;
     LEFT_DAC_MAX = 3500;
     RIGHT_DAC_MAX = 3500;
+    LEFT_SLOW_DAC_MAX = 1080;
+    
+    RIGHT_SLOW_DAC_MAX = 1080;
 
     THROTTLE_DEADBAND = 0.05f;
     TAKEUP_END = 0.20f;
 
-    RAMP_UP_RATE = 0.05f;
-    RAMP_DOWN_RATE = 0.02f;
 
     for(int i = 0 ; i < NUM_TRIM_VALUES ; i++)
     {
@@ -582,28 +568,47 @@ void updateDACDefaults() {
 
 }
 
+int getMaxDACValue(int trackID)
+{
+    
+    if(systemMode & SystemMode::SLOWMODE || systemMode & SystemMode::REVERSEMODE)
+    {
+        if(trackID == TRACK_ID::LEFT)
+        {
+            return LEFT_SLOW_DAC_MAX;
+        }
+        else
+        {
+            return RIGHT_SLOW_DAC_MAX;
+        }
+    }
+    
+    return trackID == TRACK_ID::LEFT ? LEFT_DAC_MAX : RIGHT_DAC_MAX;
+
+}
+
 
 // =====================
 // TRACK OUTPUT
 // =====================
+Pacer trackPacer(true,1000);
 void setTrackSpeed(int trackID, float speed) {
 
     speed = constrain(speed, 0.0f, 1.0f);
 
 
-    int vmax = LEFT_DAC_MAX;
-    int vstart = LEFT_DAC_START;
+    int vmax = getMaxDACValue(trackID);
 
-    if(trackID == TRACK_ID::RIGHT)
-    {
-        vmax = RIGHT_DAC_MAX;
-        vstart = RIGHT_DAC_START;
-    }
+    int vstart = (trackID == TRACK_ID::LEFT)
+             ? LEFT_DAC_START
+             : RIGHT_DAC_START;
 
     int dac = vstart + speed * (vmax - vstart);
     dac = constrain(dac, 0, vmax);
 
     static int lastDAC[2] = {-1, -1};
+
+
 
     if (dac != lastDAC[trackID]) {
 
@@ -613,6 +618,11 @@ void setTrackSpeed(int trackID, float speed) {
             mcp.setChannelValue(MCP4728_CHANNEL_B, dac);
 
         lastDAC[trackID] = dac;
+    }
+    
+    if(trackPacer.Pace())
+    {
+        Serial.print(F("Left DAC: ")); Serial.print(lastDAC[0]); Serial.print(F("  Right DAC: ")); Serial.println(lastDAC[1]);
     }
 }
 
@@ -635,14 +645,17 @@ float mapThrottle(float t, const DriveProfile& profile)
 
     x = pow(x, profile.curveExponent);
 
-    float out = 0.1f + x * (profile.maxOutput - 0.1f);
+
+    float out = 0.1f + x * 0.9f;
 
     if (t > 0.95f)
-        return profile.maxOutput;
+        return 1.0f;
 
     return out;
 
 }
+
+
 
 // =====================
 // SERIAL
@@ -1008,8 +1021,9 @@ bool displayNewSystemMode()
         if(systemMode & SystemMode::SLOWMODE)
         {
             lcd.print(F("SLOW "));
+            Serial.println(F("SLOW MODE"));
             return true;
-        }
+        }    
         
 
         lcd.print(F("NORM "));   
@@ -1062,13 +1076,12 @@ float getInterpolatedTrim(float throttle)
 // LOOP
 // =====================
 float currentOutput = 0.0f;
+Pacer lcdPacer(true,100);
+Pacer serialPacer(true,1000);
 void loop() {
 
    
-    if(displayNewSystemMode())
-    {
-      currentOutput = 0.0f;  
-    }
+
     
     handleSerial();
 
@@ -1078,6 +1091,11 @@ void loop() {
   
 
     DriveProfile* profile = SetModes();
+
+    if(displayNewSystemMode())
+    {
+      currentOutput = 0.0f;  
+    }
 
     float target = mapThrottle(throttleVal, *profile);
 
@@ -1114,7 +1132,7 @@ void loop() {
     setTrackSpeed(TRACK_ID::RIGHT, right);
 
    
-    if(millis() % STATS_UPDATE_MS == 0)
+    if(serialPacer.Pace())
     {
         Serial.print(F("Throttle :")); Serial.println(currentOutput);
         Serial.print(F("Track L: "));
@@ -1123,7 +1141,7 @@ void loop() {
         Serial.println(right); 
     }
 
-    if(millis() % BARGRAPH_UPDATE_MS == 0)
+    if(lcdPacer.Pace())
     {
         lcd.setCursor(5,1);
         lcd.print(">");
@@ -1133,9 +1151,8 @@ void loop() {
     if(modeSwitch.Pressed())
     {
           newSystemMode ^= SystemMode::SLOWMODE;
+          Serial.print("New mode is "); Serial.println(newSystemMode & SystemMode::SLOWMODE ? "SLOW" : "NORM");
     }
-
-
 
 }
 
