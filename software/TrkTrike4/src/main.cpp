@@ -1,3 +1,47 @@
+/******************************************************************************
+ *
+ *  TrakTrike-Controller
+ *
+ *  An Arduino Nano based dual-track vehicle controller for tracked electric
+ *  vehicles, skid-steer platforms and similar projects using analogue
+ *  throttle controlled BLDC motor controllers.
+ *
+ *  Features:
+ *      - Configurable throttle shaping
+ *      - Multiple drive profiles
+ *      - Track trim calibration and interpolation
+ *      - Dual MCP4728 DAC outputs
+ *      - EEPROM configuration storage
+ *      - Throttle calibration and diagnostics
+ *
+ *  Author:
+ *      Tony Goacher
+ *
+ *  Project:
+ *      https://github.com/<your-github>/TrakTrike-Controller
+ *
+ *  Copyright:
+ *      Copyright (c) 2026 Tony Goacher
+ *
+ *  License:
+ *      Released under the MIT License.
+ *
+ *  Disclaimer:
+ *      This software controls equipment capable of movement and may cause
+ *      injury, death, or property damage if used incorrectly.
+ *
+ *      The software is provided "as is", without warranty of any kind,
+ *      express or implied. The author accepts no liability for any loss,
+ *      damage, injury, or consequences arising from its use.
+ *
+ *      Users are solely responsible for ensuring that the software is
+ *      suitable for their application and that appropriate safety measures
+ *      are implemented and tested before use.
+ *
+ *      Always test with drive wheels or tracks lifted clear of the ground
+ *      before operating a vehicle under software control.
+ *
+ ******************************************************************************/
 
 #include <Arduino.h>
 #include <EEPROM.h>
