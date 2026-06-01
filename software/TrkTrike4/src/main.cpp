@@ -20,6 +20,9 @@
 // MCP4728
 // =====================
 Adafruit_MCP4728 mcp;
+constexpr int   MinDACValue = 0;
+constexpr int   MaxDACValue = 4095;
+constexpr float DAC_VREF    = 4.7f;
 
 // =====================
 // CONFIG
@@ -115,6 +118,7 @@ enum SystemMode
     BRAKEMODE = 2,
     REVERSEMODE = 4,
     FORCEMODE = 8,
+    MODECHANGE = 16,
  
 
     INIT = 0xff
@@ -130,6 +134,7 @@ uint8_t newSystemMode = SystemMode::SLOWMODE;
 // Used to detect mode transitions and drive the LCD display.
 uint8_t currentSystemMode = SystemMode::INIT;  
 
+Pacer modePacer(false,2000);
 
 typedef struct {
     uint8_t  version;
@@ -422,9 +427,9 @@ void loadDefaults() {
      cfg.settings.RIGHT_DAC_START = 1060;
      cfg.settings.LEFT_DAC_MAX = 3500;
      cfg.settings.RIGHT_DAC_MAX = 3500;
-     cfg.settings.LEFT_SLOW_DAC_MAX = 1080;
+     cfg.settings.LEFT_SLOW_DAC_MAX = 1500;
     
-     cfg.settings.RIGHT_SLOW_DAC_MAX = 1080;
+     cfg.settings.RIGHT_SLOW_DAC_MAX = 1500;
 
      cfg.settings.THROTTLE_DEADBAND = 0.05f;
      cfg.settings.TAKEUP_END = 0.20f;
@@ -559,34 +564,22 @@ void applyCalibration()
     Serial.println(cfg.settings.THROTTLE_MAX_ADC);
 }
 
-// =====================
-// DAC DEFAULTS
-// =====================
-int lastStoredDACStartLeft = -1;
-int lastStoredDACStartRight = -1;
 
 void updateDACDefaults() {
 
 
     Serial.println(F("Updating DAC defaults"));
 
-    // Set outputs first
-    mcp.setChannelValue(MCP4728_CHANNEL_A, 0);//LEFT_DAC_START);
-    mcp.setChannelValue(MCP4728_CHANNEL_B, 0);// RIGHT_DAC_START
+    // Store a power-up default of 0V in the DAC EEPROM.
+    // Some motor controllers refuse to enable if any throttle
+    // voltage is present during their startup sequence.
+    mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
+    mcp.setChannelValue(MCP4728_CHANNEL_B, 0);
   
-    Serial.print(F("Default LEFT_DAC_START "));
-    Serial.println(cfg.settings.LEFT_DAC_START);
-
-    Serial.print(F("Default RIGHT_DAC_START "));
-    Serial.println(cfg.settings.RIGHT_DAC_START);
-
     mcp.setChannelValue(MCP4728_CHANNEL_C, 0);
     mcp.setChannelValue(MCP4728_CHANNEL_D, 0);
 
     mcp.saveToEEPROM();
-
-    lastStoredDACStartLeft = cfg.settings.LEFT_DAC_START;
-    lastStoredDACStartRight = cfg.settings.RIGHT_DAC_START;
 
 }
 
@@ -750,9 +743,7 @@ void printParams() {
 
 void setDACMax(TRACK_ID track, int value)
 {
-    constexpr int   MinDACValue = 0;
-    constexpr int   MaxDACValue = 4095;
-    constexpr float DAC_VREF    = 4.7f;
+
     value = constrain(value, MinDACValue, MaxDACValue);
 
     if(track == LEFT)
@@ -1050,7 +1041,7 @@ void processCommand(String cmd)
         return;
     }
 
-    if (cmd.startsWith("dacmaxl "))
+    if (cmd.startsWith("dacmaxr "))
     {
         setDACMax(RIGHT, cmd.substring(8).toInt());
         return;
@@ -1132,44 +1123,47 @@ void setup() {
     barGraph.begin();
 }
 
-
 /**
- * Determine the active drive profile and update the pending system mode.
+ * Evaluate all operating modes and select the drive profile for the
+ * current control loop.
  *
- * This function evaluates all mode inputs in priority order and returns
- * the DriveProfile that should be used for throttle mapping and ramping.
+ * Mode bits are updated on every call to ensure newSystemMode always
+ * reflects the current state of the vehicle inputs, regardless of
+ * profile priority.
  *
- * The selected mode is recorded in newSystemMode, which is later compared
- * against currentSystemMode by displayNewSystemMode(). This allows mode changes
- * to trigger one-shot actions such as LCD updates and output resets.
+ * Profiles are selected according to the following priority:
  *
- * Mode priority is:
+ *   BRAKE    - Highest priority. Applies brakeProfile.
+ *   FORCE    - Calibration mode. Uses normalProfile to provide
+ *              the full DAC output range.
+ *   REVERSE  - Uses slowProfile for controlled reversing.
+ *   SLOW     - Operator-selected manoeuvring mode.
+ *   NORMAL   - Default operating mode.
  *
- *   BRAKE    - Highest priority. Immediately applies brakeProfile and overrides
- *              all other modes.
+ * Once a profile has been selected by a higher-priority mode, lower
+ * priority modes may still update their mode bits but cannot replace
+ * the selected profile.
  *
- *   FORCE    - Used during trim calibration. Bypasses normal operation
- *              and forces use of the normal profile.
+ * The returned profile is guaranteed to be valid. If an unexpected
+ * condition leaves no profile selected, brakeProfile is used as a
+ * fail-safe.
+ * 
+ * Note that newSystemMode is the value the mode needs to be. It may already be in
+ * the correct state from a previous iteration. It will be copied to currentSystemState 
+ * if it's value is different
+ *  
  *
- *   REVERSE  - Applies slowProfile to provide reduced-speed reversing.
- *
- *   SLOW     - Operator-selected manoeuvring mode. Uses slowProfile when
- *              no higher-priority modes are active.
- *
- * The early returns are intentional and implement the mode priority system.
- *
- * @return Pointer to the DriveProfile that should be used for this loop.
+ * @return Pointer to the DriveProfile for this control loop.
  */
 DriveProfile* SetModes()
 {
-    DriveProfile* profile = &normalProfile;
+    DriveProfile* profile = NULL;   // Only update the profile if it has not already been set
 
 
     if(digitalRead(BRAKE) == LOW)
     {
         newSystemMode |= SystemMode::BRAKEMODE; 
-        profile = &brakeProfile;
-        return &brakeProfile;         // Highest priority
+        profile = &brakeProfile;    // This overrides everything
     }
     else
     {
@@ -1179,7 +1173,12 @@ DriveProfile* SetModes()
     if(FORCE_OUTPUT > 0.0)
     {
         newSystemMode |= SystemMode::FORCEMODE;
-        return &normalProfile;
+        // Only select this profile if a higher-priority mode
+        // has not already selected one.
+        if(profile  == NULL)    
+        {
+            profile = &normalProfile;   // FORCE_MODE requires full DAC range so force it here
+        }            
     }
     else
     {
@@ -1188,20 +1187,57 @@ DriveProfile* SetModes()
 
     if(digitalRead(REVERSE) == LOW)
     {
+        if(!(currentSystemMode & SystemMode::REVERSEMODE))
+        {
+            modePacer.PacerReset();
+        }           
+
         newSystemMode |= SystemMode::REVERSEMODE;
-        return &slowProfile;
+        if(profile == NULL)
+        {
+            profile =   &slowProfile;  
+        }
+    
     }
     else
     {
+        if((currentSystemMode & SystemMode::REVERSEMODE))
+        {
+            modePacer.PacerReset();
+        }    
         newSystemMode &= ~SystemMode::REVERSEMODE;
     }
 
-    if(currentSystemMode & SystemMode::SLOWMODE)
+    if(newSystemMode & SystemMode::SLOWMODE)
     {
-        profile = &slowProfile;
+        if(profile == NULL)
+        {
+            profile =  &slowProfile;  
+        }
+     
+    }
+    else
+    {
+        if(profile == NULL)
+        {
+           profile = &normalProfile;
+        }            
+    }
+   
+    if(profile == NULL)
+    {
+        Serial.print(F("ERROR : MODE IS UNDEFINED! : ")); Serial.print(currentSystemMode);
+        profile = &brakeProfile;
     }
 
-    
+    if(modePacer.Running())
+    {
+        newSystemMode |= SystemMode::MODECHANGE;  
+    }
+    else
+    {
+        newSystemMode &= ~SystemMode::MODECHANGE;  
+    }
     return profile;
 }
 
@@ -1237,6 +1273,12 @@ bool displayNewSystemMode()
         currentSystemMode = newSystemMode;
         lcd.setCursor(0,1);
 
+        if(currentSystemMode & SystemMode::MODECHANGE)
+        {
+            lcd.print(F("WAIT "));
+            return true;
+        }  
+
         if(currentSystemMode & SystemMode::BRAKEMODE)
         {
             lcd.print(F("BRKE "));
@@ -1258,7 +1300,6 @@ bool displayNewSystemMode()
         if(currentSystemMode & SystemMode::SLOWMODE)
         {
             lcd.print(F("SLOW "));
-            Serial.println(F("SLOW MODE"));
             return true;
         }    
         
@@ -1338,7 +1379,9 @@ float getInterpolatedTrim(float throttle)
     return 0.0f;
 }
 
-
+/*
+* Display the current mode on the serial interface
+*/
 void showMode()
 {
     Serial.print(F("MODE: "));
@@ -1366,6 +1409,11 @@ void showMode()
     {
         Serial.print(F(" REVERSE"));
     }
+
+    if(currentSystemMode & SystemMode::MODECHANGE)
+    {
+        Serial.print(F(" WAIT"));
+    }
     Serial.println();
 
 }
@@ -1376,15 +1424,18 @@ void showMode()
 float currentOutput = 0.0f;
 Pacer lcdPacer(true,BARGRAPH_UPDATE_MS);
 Pacer serialPacer(true,STATS_UPDATE_MS);
-void loop() {
 
-    
+void loop() 
+{   
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
 
     DriveProfile* profile = SetModes();
 
+    // Force a controlled re-ramp whenever the drive mode changes.
+    // This prevents abrupt speed changes when transitioning between
+    // normal, slow, reverse and brake profiles.
     if(displayNewSystemMode())
     {
       currentOutput = 0.0f;  
@@ -1399,13 +1450,19 @@ void loop() {
     currentOutput += (target - currentOutput) * rampRate;
 
  
+    // Trim is applied based on the final commanded output rather than
+    // raw throttle position so that interpolation follows the actual
+    // speed demand after throttle shaping and ramp limiting.
     float trim = getInterpolatedTrim(currentOutput);
 
         
-    if(FORCE_OUTPUT > 0.0f)     // This is used when calibrating the trim.
+    // Calibration requires identical left/right outputs so that
+    // measured RPM differences reflect drivetrain imbalance only.
+    // If we are calibrating the trim, do not apply a trim value!
+    if(FORCE_OUTPUT > 0.0f )     
     {
         currentOutput = FORCE_OUTPUT;
-        trim = 0.0f;            // Do not apply trim in calibration mode
+        trim = 0.0f;      
     }
 
     float left  = currentOutput;
@@ -1419,10 +1476,19 @@ void loop() {
     {
         left *= (1.0f + trim); // trim is negative
     }
-   
-
-    setTrackSpeed(TRACK_ID::LEFT, left);
-    setTrackSpeed(TRACK_ID::RIGHT, right);
+    
+    modePacer.Pace();
+    if(modePacer.Running())
+    {
+        mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
+        mcp.setChannelValue(MCP4728_CHANNEL_B, 0);   
+    }
+    else
+    {
+        setTrackSpeed(TRACK_ID::LEFT, left);
+        setTrackSpeed(TRACK_ID::RIGHT, right);
+        newSystemMode &=~ SystemMode::MODECHANGE;
+    }
 
    
     if(serialPacer.Pace())
@@ -1442,6 +1508,7 @@ void loop() {
         barGraph.ShowBargraph(currentOutput);
     }
 
+    // Toggle manoeuvring mode for each press of the mode button. Other mode bits are preserved.
     if(modeSwitch.Pressed())
     {
           newSystemMode ^= SystemMode::SLOWMODE;
