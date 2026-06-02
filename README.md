@@ -5,6 +5,8 @@ This software can control equipment capable of movement.
 Always test with tracks or wheels lifted clear of the ground before
 operating a vehicle under software control.
 
+[Git Repo: https://github.com/tonygoacher/TrakTrike4Electronics](https://github.com/tonygoacher/TrakTrike4Electronics)
+
 An Arduino Nano based dual-track vehicle controller designed for tracked electric vehicles, skid-steer platforms and similar projects that use low cost Aliexpress style BLDC motor controllers. 
 GCODE files for PCB manufacture and DesignSpark files are included.
 The PCB is designed as a drop-in interface between the vehicle controls and a pair of BLDC motor controllers.
@@ -373,8 +375,6 @@ Contributions, bug reports and suggestions are welcome.
 # License
 
 MIT License
-
-(or replace with your preferred licence)
 
 ---
 
