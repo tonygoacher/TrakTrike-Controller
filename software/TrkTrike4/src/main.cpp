@@ -18,7 +18,7 @@
  *      Tony Goacher
  *
  *  Project:
- *      https://github.com/<your-github>/TrakTrike-Controller
+ *      https://github.com/tonygoacher/TrakTrike4Electronics
  *
  *  Copyright:
  *      Copyright (c) 2026 Tony Goacher
