@@ -45,7 +45,8 @@ The controller sits above the BLDC motor controllers and is responsible for:
 
 The project uses an MCP4728 quad DAC to generate precise analogue throttle signals for independent left and right motor control.
 
-I created a PCB (files included) for the project and PCBWay were king enough to sponsor it.
+I created a PCB (files included) for the project and PCBWay were kind enough to sponsor it.
+
 You can get a discount with PCBWay using [this link](https://pcbway.com/g/jfRZ44).
 
 ---
