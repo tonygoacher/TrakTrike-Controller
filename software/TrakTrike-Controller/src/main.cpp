@@ -18,7 +18,7 @@
  *      Tony Goacher
  *
  *  Project:
- *      https://github.com/tonygoacher/TrakTrike4Electronics
+  *     https://github.com/tonygoacher/TrakTrike-Controller
  *
  *  Copyright:
  *      Copyright (c) 2026 Tony Goacher
@@ -30,11 +30,12 @@
  *      This software controls equipment capable of movement and may cause
  *      injury, death, or property damage if used incorrectly.
  *
- *      The software is provided "as is", without warranty of any kind,
+ *      The software and associated hardware design is provided 
+ *      "as is", without warranty of any kind,
  *      express or implied. The author accepts no liability for any loss,
  *      damage, injury, or consequences arising from its use.
  *
- *      Users are solely responsible for ensuring that the software is
+ *      Users are solely responsible for ensuring that the software and hardware is
  *      suitable for their application and that appropriate safety measures
  *      are implemented and tested before use.
  *

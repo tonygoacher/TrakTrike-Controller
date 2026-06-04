@@ -11,16 +11,22 @@ An Arduino Nano based dual-track vehicle controller designed for tracked electri
 GCODE files for PCB manufacture and DesignSpark files are included.
 The PCB is designed as a drop-in interface between the vehicle controls and a pair of BLDC motor controllers.
 
+This software project is built using VSCODE with the PlatformIO extension.
+
 [I created TrakTrike, a electrically-driven dual-track sit-on trike for EMF camp 2024.](https://hackaday.io/project/205248-electric-tracked-tricycle-for-emf-camp)
 
 Initially I used VESC75100 clones for the motor controllers. These gave me a great way of controlling accel/decel profiles on a per motor basis...but, I found them very fragile..having destroyed one pair just by changing some parameters and a second pair at WHY2025 for no reason I ever worked out.
 
 At WHY2025 I met some members of [Hacky Racers](https://hackyracers.co.uk/) who suggested trying the inexpensive BLDC controllers available from AliExpress.
 
-While these controllers were surprisingly robust and inexpensive, their low-speed throttle behaviour was poor. The vehicle was difficult to manoeuvre accurately OR SAFELY  at low throttle positions.
+While these controllers were surprisingly robust and inexpensive, their low-speed throttle behaviour was poor. The vehicle was difficult to manoeuvre accurately OR SAFELY at low throttle positions.
+Also, using two controllers resulted in  slightly different speeds for a given throttle input.
 
 TrakTrike-Controller was developed to solve that problem.
 The controller transforms the behaviour of inexpensive BLDC controllers by providing configurable throttle shaping, ramp control and speed limiting.
+
+The controller expects a throttle input from a standard 3 wire hall effect style throttle running at 5V. It also drives a 16x2 line I2C display for
+status info and monitors a NO push button swith to allow manual toggle between normal mode/slow mode.
 
 The controller sits above the BLDC motor controllers and is responsible for:
 

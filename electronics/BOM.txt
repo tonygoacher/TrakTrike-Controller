@@ -1,0 +1,25 @@
+C1..C6 0.1uF 0805 
+R1, R2	1K 1% 0805
+R3, R4 (optional) 10K 1% 0805
+U1 MCP4728 DAC module. (https://www.aliexpress.com/item/1005010677659091.html)
+U2 MCP6002 8 pin DIP. Make sure you get these from a reliable source. I got fake ones off AliExpress and they do not have full rail to rail output.
+U3 Arduino Nano 
+
+Apologies for all the oddball connector identifiers!
+
+J1 Molex KK 5 way header 22-27-2051
+J11, J5 Molex KK 254 4 way header 22-23-2041 
+PL1, PL2, J4 Molex 3 way KK 254 3 way header 22-27-2031
+SK1 Molex KK 254 6 way header 22-27-2061
+J8 Molex KK 254 2 way header 22-23-2021
+
+2.54 mm strip headers for Arduino and DAC x 4
+https://www.aliexpress.com/item/1005006034877497.html
+
+LCD1602 I2C line LCD display  https://www.aliexpress.com/item/1005006964073869.html
+
+
+
+
+
+
