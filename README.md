@@ -13,7 +13,7 @@ The PCB is designed as a drop-in interface between the vehicle controls and a pa
 
 This software project is built using VSCODE with the PlatformIO extension.
 
-<img width="512" height="512" alt="TTCover" src="https://github.com/user-attachments/assets/0532fd34-d750-4631-9b42-d38e7136c60e" />
+<img width="512" height="364" alt="TTCover" src="https://github.com/user-attachments/assets/0532fd34-d750-4631-9b42-d38e7136c60e" />
 
 [I created TrakTrike, a electrically-driven dual-track sit-on trike for EMF camp 2024.](https://hackaday.io/project/205248-electric-tracked-tricycle-for-emf-camp)
 
