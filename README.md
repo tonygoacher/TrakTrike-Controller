@@ -13,6 +13,8 @@ The PCB is designed as a drop-in interface between the vehicle controls and a pa
 
 This software project is built using VSCODE with the PlatformIO extension.
 
+<img width="2857" height="2030" alt="TTCover" src="https://github.com/user-attachments/assets/0532fd34-d750-4631-9b42-d38e7136c60e" />
+
 [I created TrakTrike, a electrically-driven dual-track sit-on trike for EMF camp 2024.](https://hackaday.io/project/205248-electric-tracked-tricycle-for-emf-camp)
 
 Initially I used VESC75100 clones for the motor controllers. These gave me a great way of controlling accel/decel profiles on a per motor basis...but, I found them very fragile..having destroyed one pair just by changing some parameters and a second pair at WHY2025 for no reason I ever worked out.
@@ -23,6 +25,10 @@ While these controllers were surprisingly robust and inexpensive, their low-spee
 Also, using two controllers resulted in  slightly different speeds for a given throttle input.
 
 TrakTrike-Controller was developed to solve that problem.
+
+<img width="2572" height="2504" alt="tt4pcb" src="https://github.com/user-attachments/assets/1f61cc57-f24d-4d50-a5ea-8c6f264a005b" />
+
+
 The controller transforms the behaviour of inexpensive BLDC controllers by providing configurable throttle shaping, ramp control and speed limiting.
 
 The controller expects a throttle input from a standard 3 wire hall effect style throttle running at 5V. It also drives a 16x2 line I2C display for
