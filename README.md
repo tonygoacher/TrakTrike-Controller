@@ -362,6 +362,12 @@ Some motor controllers refuse to operate if throttle voltage is present during s
 
 To accommodate this behaviour, the controller forces both DAC outputs to 0V during power-up before normal operation begins.
 
+## Mode Change Interlock
+
+If a mode change occurs with a none zero input throttle, the outputs are forced
+to zero until the throttle is released. This prevents dangerous situations such as
+selecting normal mode when current mode is slow and full throttle is applied.
+
 ## Throttle Fault Detection
 
 Out-of-range throttle readings are detected automatically and result in zero throttle output.
