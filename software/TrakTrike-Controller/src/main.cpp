@@ -1209,11 +1209,7 @@ DriveProfile* SetModes()
 
 
     if(digitalRead(BRAKE) == LOW)
-    {
-        if(!(currentSystemMode & SystemMode::BRAKEMODE))
-        {
-            modePacer.PacerReset();
-        }  
+    { 
         newSystemMode |= SystemMode::BRAKEMODE; 
         profile = &brakeProfile;    // This overrides everything
     }
