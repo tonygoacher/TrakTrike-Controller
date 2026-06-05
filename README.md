@@ -21,8 +21,8 @@ Initially I used VESC75100 clones for the motor controllers. These gave me a gre
 
 At WHY2025 I met some members of [Hacky Racers](https://hackyracers.co.uk/) who suggested trying the inexpensive BLDC controllers available from AliExpress.
 
-While these controllers were surprisingly robust and inexpensive, their low-speed throttle behaviour was poor. The vehicle was difficult to manoeuvre accurately OR SAFELY at low throttle positions.
-Also, using two controllers resulted in  slightly different speeds for a given throttle input.
+While these controllers were surprisingly robust and inexpensive, their low-speed throttle behaviour was poor. It was very difficult to obtain a slow speed. The throttle had no effect until the vehicle shot off far too fast.  The vehicle was difficult to manoeuvre accurately OR SAFELY at low throttle positions.
+Also, using two controllers resulted in slightly different speeds for a given throttle input.
 
 TrakTrike-Controller was developed to solve that problem.
 
