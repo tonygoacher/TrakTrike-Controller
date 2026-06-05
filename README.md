@@ -70,7 +70,7 @@ Profiles control:
 - Throttle response curve
 - Acceleration rate
 - Deceleration rate
-- Maximum DAC output
+
 
 ---
 
@@ -134,6 +134,7 @@ Benefits include:
 - Arduino Nano
 - MCP4728 Quad DAC
 - MCP6002 rail-to-rail op amp (this is used as a voltage follower to 'beef up' the DAC output)
+- Custom PCB from PCBWay
 - 16x2 I²C LCD
 - Hall-effect twist throttle
 - Brake switch
