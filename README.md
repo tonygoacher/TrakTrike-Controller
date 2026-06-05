@@ -181,7 +181,16 @@ When active:
 
 ## Force Mode
 
-Calibration mode used to apply a fixed throttle value independently of the twist throttle.
+Calibration mode used to apply a fixed throttle value independently of the twist throttle. This overrides
+all other modes except brake.
+
+The LCD display indicates the current mode:
+SLOW
+NORM
+RVRS
+BRKE
+FRCE
+T<>0   Displayed if a mode change has been detected e.g. SLOW to NORM but the input throttle is not at zero. Remains active until throttle is zero.
 
 ---
 
@@ -227,6 +236,29 @@ command to double check the values as printed. Then
 to write to EEPROM.
 
 
+## Normal Mode Max DAC value
+
+**DO THIS BEFORE TRIM PROCEDURE**
+
+This is the value that sets the maximum voltage the DAC will output at full throttle. The default of 3500 is a sensible value for BLDC controllers but if your vehicle is too fast or too slow at max throttle, you can change the left and right values using the 
+``dacmaxl``` and ```dacmaxr``` commands.
+
+e.g.
+```dacmaxl 3600``` 
+Sets the left side normal mode speed to above the default value of 3500. Issue the 
+```save``` command to write to EEPROM.
+
+Test the value on the vehicle and increase/decrease as required. I found it sensible to have both left and right values the same. You may need different values.
+
+## Slow Mode Max DAC values
+This is the value that sets the maximum voltage that the DAC will output at full throttle in slow mode. The default of 1500 is a sensible value for BLDC controllers but if your vehicle is too fast or too slow at max throttle, you can increase the value using the 
+``slowmaxl``` and ```slowmaxr``` commands.
+
+e.g.
+```slowmaxl 1500``` 
+Sets the slow mode speed to above the default value of 1060. Issue the 
+```save``` command to write to EEPROM.
+
 
 ## Trim Calibration Procedure
 **Required equipment: tachometer**
@@ -238,7 +270,7 @@ By forcing the throttle value to a pre-defined set of values which define the in
 Issue the ```show``` command. The device will print a table of the current trim points and the current trim values :
 
 Trims: Point    Value
-      0.00      0.17
+      0.00      0.00    
       0.10      -0.16
       0.20      0.03
       0.30      0.08
@@ -251,7 +283,7 @@ Trims: Point    Value
       1.00      0.17
 
 
-For each entry in the point column, issue a force command. e,g.
+For each entry in the point column, except 0.0,  issue a force command. e,g.
 ```text
 force 0.5
 ```
@@ -267,27 +299,6 @@ calibrate 120 125
 Repeat for all rows. It's ok to go back to a previous point value and re-calibrate just that point. 
 When all points have been calibrated. Issue the ```show``` command to review the values. If all looks OK, issue the 
 
-```save``` command to write to EEPROM.
-
-## Normal Mode Max DAC value
-
-This is the value that sets the maximum voltage  that the DAC will output at full throttle. The default of 3500 is a sensible value for BLDC controllers but if your vehicle is too fast or too slow at max throttle, you can increase the value using the 
-``dacmaxl``` and ```dacmaxr``` commands.
-
-e.g.
-```dacmaxl 3600``` 
-Sets the normal mode speed to above the default value of 3500. Issue the 
-```save``` command to write to EEPROM.
-
-Test the value on the vehicle and increase/decrease as required. I found it sensible to have both left and right values the same. You may need different values.
-
-## Slow Mode Max DAC values
-This is the value that sets the maximum voltage that the DAC will output at full throttle in slow mode. The default of 1500 is a sensible value for BLDC controllers but if your vehicle is too fast or too slow at max throttle, you can increase the value using the 
-``slowmaxl``` and ```slowmaxr``` commands.
-
-e.g.
-```slowmaxl 1500``` 
-Sets the slow mode speed to above the default value of 1060. Issue the 
 ```save``` command to write to EEPROM.
 
 Test the value on the vehicle and increase/decrease as required. I found it sensible to have both left and right values the same. You may need different values.
@@ -333,6 +344,13 @@ force 0.50
 force 0.75
 ```
 
+## Trim motors
+
+Trim the motors at the current ```force``` speed.
+
+```text
+trim 1050 1200
+```
 ---
 
 # Safety Features

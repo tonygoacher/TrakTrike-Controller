@@ -179,7 +179,9 @@ uint8_t newSystemMode = SystemMode::SLOWMODE;
 // Used to detect mode transitions and drive the LCD display.
 uint8_t currentSystemMode = SystemMode::INIT;  
 
-Pacer modePacer(false,2000);
+ // When changing mode, force the throttle to zero for 500ms or continuously until throttle released
+// This prevents unwanted movement if reverse is enabled at none aero throttle
+Pacer modePacer(false,500);   
 
 typedef struct {
     uint8_t  version;
@@ -657,7 +659,8 @@ int getMaxDACValue(int trackID)
 // TRACK OUTPUT
 // =====================
 Pacer trackPacer(true,STATS_UPDATE_MS);
-void setTrackSpeed(int trackID, float speed) {
+void setTrackSpeed(int trackID, float speed, bool forceWrite)
+{
 
     speed = constrain(speed, 0.0f, 1.0f);
 
@@ -675,7 +678,7 @@ void setTrackSpeed(int trackID, float speed) {
 
 
 
-    if (dac != lastDAC[trackID]) {
+    if (dac != lastDAC[trackID] || forceWrite) {
 
         if (trackID == 0)
             mcp.setChannelValue(MCP4728_CHANNEL_A, dac);
@@ -1207,11 +1210,19 @@ DriveProfile* SetModes()
 
     if(digitalRead(BRAKE) == LOW)
     {
+        if(!(currentSystemMode & SystemMode::BRAKEMODE))
+        {
+            modePacer.PacerReset();
+        }  
         newSystemMode |= SystemMode::BRAKEMODE; 
         profile = &brakeProfile;    // This overrides everything
     }
     else
     {
+        if((currentSystemMode & SystemMode::BRAKEMODE))
+        {
+            modePacer.PacerReset();
+        } 
         newSystemMode &= ~SystemMode::BRAKEMODE;    
     }
 
@@ -1255,6 +1266,12 @@ DriveProfile* SetModes()
 
     if(newSystemMode & SystemMode::SLOWMODE)
     {
+
+        if(!(currentSystemMode & SystemMode::SLOWMODE))
+        {
+            modePacer.PacerReset();
+        }  
+
         if(profile == NULL)
         {
             profile =  &slowProfile;  
@@ -1263,6 +1280,10 @@ DriveProfile* SetModes()
     }
     else
     {
+        if(currentSystemMode & SystemMode::SLOWMODE)
+        {
+            modePacer.PacerReset();
+        }  
         if(profile == NULL)
         {
            profile = &normalProfile;
@@ -1320,7 +1341,7 @@ bool displayNewSystemMode()
 
         if(currentSystemMode & SystemMode::MODECHANGE)
         {
-            lcd.print(F("WAIT "));
+            lcd.print(F("T<>0 "));
             return true;
         }  
 
@@ -1472,6 +1493,7 @@ Pacer serialPacer(true,STATS_UPDATE_MS);
 
 void loop() 
 {   
+    static float lastValue = -1.0f;
     handleSerial();
 
     float throttleVal = throttle.GetThrottle();
@@ -1483,7 +1505,7 @@ void loop()
     // normal, slow, reverse and brake profiles.
     if(displayNewSystemMode())
     {
-      currentOutput = 0.0f;  
+        currentOutput = 0.0f;
     }
 
     float target = mapThrottle(throttleVal, *profile);
@@ -1522,16 +1544,26 @@ void loop()
         left *= (1.0f + trim); // trim is negative
     }
     
-    modePacer.Pace();
+    bool forceDACWrite = false;     // If we have just dropped out of a mode pacer delay, force a write to the dac
+    if(modePacer.Pace())
+    {
+        forceDACWrite = true;
+    }
+
     if(modePacer.Running())
     {
         mcp.setChannelValue(MCP4728_CHANNEL_A, 0);
         mcp.setChannelValue(MCP4728_CHANNEL_B, 0);   
+        if(currentOutput > 0.0f)
+        {
+            modePacer.PacerReset();
+        }
+        currentOutput = 0.0f;
     }
     else
     {
-        setTrackSpeed(TRACK_ID::LEFT, left);
-        setTrackSpeed(TRACK_ID::RIGHT, right);
+        setTrackSpeed(TRACK_ID::LEFT, left, forceDACWrite);
+        setTrackSpeed(TRACK_ID::RIGHT, right, forceDACWrite);
         newSystemMode &=~ SystemMode::MODECHANGE;
     }
 
@@ -1546,8 +1578,9 @@ void loop()
         showMode();
     }
 
-    if(lcdPacer.Pace())
+    if(lcdPacer.Pace() && (abs(lastValue - currentOutput) >= 0.01))
     {
+        lastValue = currentOutput;
         lcd.setCursor(5,1);
         lcd.print(">");
         barGraph.ShowBargraph(currentOutput);
