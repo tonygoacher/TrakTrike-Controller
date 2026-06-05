@@ -47,7 +47,7 @@ The project uses an MCP4728 quad DAC to generate precise analogue throttle signa
 
 I created a PCB (files included) for the project and PCBWay were kind enough to sponsor it.
 
-You can get a discount with PCBWay using [this link](https://pcbway.com/g/jfRZ44).
+[The project files are here on PCBWay if you care to order your own PCB.](https://www.pcbway.com/project/shareproject/TrakTrike_Controller_de2d4c04.html)
 
 ---
 
