@@ -1478,7 +1478,7 @@ void showMode()
 
     if(currentSystemMode & SystemMode::MODECHANGE)
     {
-        Serial.print(F(" WAIT"));
+        Serial.print(F(" T<>0"));
     }
     Serial.println();
 
@@ -1556,7 +1556,7 @@ void loop()
         mcp.setChannelValue(MCP4728_CHANNEL_B, 0);   
         if(currentOutput > 0.0f)
         {
-            modePacer.PacerReset();
+            modePacer.PacerReset();     // Force zero output until throttle is released
         }
         currentOutput = 0.0f;
     }
