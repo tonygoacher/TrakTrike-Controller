@@ -688,7 +688,7 @@ void setTrackSpeed(int trackID, float speed, bool forceWrite)
         lastDAC[trackID] = dac;
     }
     
-    if(trackPacer.Pace())
+    if(false)//trackPacer.Pace())
     {
         Serial.print(F("Left DAC: ")); Serial.print(lastDAC[0]); Serial.print(F("  Right DAC: ")); Serial.println(lastDAC[1]);
     }
@@ -1074,10 +1074,12 @@ void processCommand(String cmd)
         if (FORCE_OUTPUT)
         {
             commandedThrottle = FORCE_OUTPUT;
+            Serial.println("USing force");
         }
         else
         {
             commandedThrottle = throttle.GetThrottle();
+            Serial.println("USing throttle");
         }
         calibrate(commandedThrottle, leftSpeed,rightSpeed);
         return;
@@ -1564,7 +1566,7 @@ void loop()
     }
 
    
-    if(serialPacer.Pace())
+    if(false)//serialPacer.Pace())
     {
         Serial.print(F("Throttle :")); Serial.println(currentOutput);
         Serial.print(F("Track L: "));
