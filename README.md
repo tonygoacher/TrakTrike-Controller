@@ -1,8 +1,16 @@
 # TrakTrike-Controller
 
-  
+<p align="center">
+  <img src="images//Traktrike.png" width="600">
+</p>p>  
 
-An Arduino Nano based dual-track vehicle controller designed for tracked electric vehicles, skid-steer platforms and similar projects that use low cost Aliexpress style BLDC motor controllers.
+<p align="center">
+  <img src="images/SeatedBoard.jpg" width="600">
+</p>
+
+Project files at: https://github.com/tonygoacher/TrakTrike-Controller
+
+An Arduino Nano based dual-track vehicle controller designed for tracked electric vehicles,dual motor drive platforms and similar projects that use low cost Aliexpress style BLDC motor controllers.
 
 GCODE files for PCB manufacture and DesignSpark files are included.
 
@@ -710,13 +718,9 @@ Contributions, bug reports and suggestions are welcome.
 # License
 
   
-
-MIT License
+This project is licensed under the MIT license.
 
   
-
-(or replace with your preferred licence)
-
   
 
 ---
@@ -724,4 +728,6 @@ MIT License
   
 
 *"Many design decisions in this project were driven by real-world testing rather than simulation."*
+
+
 
