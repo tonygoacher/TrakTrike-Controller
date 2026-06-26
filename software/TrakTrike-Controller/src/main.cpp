@@ -1124,7 +1124,7 @@ void setup() {
 
     lcd.init();
     lcd.backlight();
-    lcd.print(F(" TrakTrike v4.0 "));
+    lcd.print(F("    TrakTrik    "));
     lcd.setCursor(0,1);
     lcd.print(F("Initialising..."));
 
