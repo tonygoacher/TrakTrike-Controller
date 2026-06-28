@@ -10,7 +10,7 @@
 
 Project files at: https://github.com/tonygoacher/TrakTrike-Controller
 
-An Arduino Nano based dual-track vehicle controller designed for tracked electric vehicles,dual motor drive platforms and similar projects that use low cost Aliexpress style BLDC motor controllers.
+An Arduino Nano based dual-track pusher vehicle controller designed for tracked electric vehicles,dual motor drive platforms and similar projects that use low cost Aliexpress style BLDC motor controllers.
 
 GCODE files for PCB manufacture and DesignSpark files are included.
 
