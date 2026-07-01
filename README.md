@@ -10,7 +10,7 @@
 
 Project files at: https://github.com/tonygoacher/TrakTrike-Controller
 
-An Arduino Nano based dual-track pusher vehicle controller designed for tracked electric vehicles,dual motor drive platforms and similar projects that use low cost Aliexpress style BLDC motor controllers.
+An Arduino Nano based dual-track pusher vehicle controller designed for dual motor drive platforms and similar projects that use low cost Aliexpress style BLDC motor controllers.
 
 GCODE files for PCB manufacture and DesignSpark files are included.
 
@@ -341,6 +341,9 @@ Connect the USB serial port of the arduino to a PC and run a monitor program (Th
 
 ```
 
+**ENSURE THE VEHICLE IS LIFTED TO PREVENT MOVEMENT DURING THIS PROCEDURE. THE DRIVE MOTORS WILL BE ACTIVATED!**
+
+
 cal min (Set the minimum throttle input value)
 
 cal max (Set the maximum throttle input value)
@@ -391,7 +394,7 @@ Did the motor turn? If no, repeat with higher values until it does, then gradual
 
 If the motor turns with ```startl 1000```, gradually reduce the value until it doesn't.
 
-  
+Repeat for right side using ```startr``` command.
 
 When left and right start dac values have been found issue the
 
